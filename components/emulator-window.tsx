@@ -48,7 +48,7 @@ type WidgetItem = {
   text?: string
 }
 
-const GRID = 100
+const GRID = 84
 
 const initialApps: Omit<IconItem, "x" | "y">[] = [
   { id: "play", name: "Google Play", icon: "/icons/google-play.png" },
@@ -149,11 +149,15 @@ function snapToGrid(rect: { width: number; height: number }, x: number, y: numbe
   let row = Math.round((cy - PAD - (cellsH * cellH) / 2) / cellH)
   col = clamp(col, 0, cols - cellsW)
   row = clamp(row, 0, rows - cellsH)
+  return { col, row, cellsW, cellsH, cellW, cellH, cols, rows }
+}
+
+/* pixel position + highlight rect for a given cell range */
+function cellToBox(col: number, row: number, cellsW: number, cellsH: number, cellW: number, cellH: number, w: number, h: number) {
   const cellLeft = PAD + col * cellW
   const cellTop = PAD + row * cellH
   const blockW = cellsW * cellW
   const blockH = cellsH * cellH
-  // center the element inside the cells it occupies
   return {
     x: cellLeft + (blockW - w) / 2,
     y: cellTop + (blockH - h) / 2,
@@ -162,6 +166,55 @@ function snapToGrid(rect: { width: number; height: number }, x: number, y: numbe
     cellW: blockW,
     cellH: blockH,
   }
+}
+
+/* set of occupied "col,row" cells for every item except the one being moved */
+function occupiedCells(
+  rect: { width: number; height: number },
+  icons: IconItem[],
+  widgets: WidgetItem[],
+  excludeId: string,
+) {
+  const { cellW, cellH } = gridInfo(rect.width, rect.height)
+  const set = new Set<string>()
+  const add = (x: number, y: number, w: number, h: number) => {
+    const col = Math.round((x + w / 2 - PAD - (Math.max(1, Math.round(w / cellW)) * cellW) / 2) / cellW)
+    const row = Math.round((y + h / 2 - PAD - (Math.max(1, Math.round(h / cellH)) * cellH) / 2) / cellH)
+    const cw = Math.max(1, Math.round(w / cellW))
+    const ch = Math.max(1, Math.round(h / cellH))
+    for (let c = col; c < col + cw; c++) for (let r = row; r < row + ch; r++) set.add(`${c},${r}`)
+  }
+  icons.forEach((i) => i.id !== excludeId && add(i.x, i.y, 80, 88))
+  widgets.forEach((w) => w.id !== excludeId && add(w.x, w.y, w.w, w.h))
+  return set
+}
+
+/* nearest free top-left cell for a span, searching outward in rings */
+function findFreeCell(
+  startCol: number,
+  startRow: number,
+  cellsW: number,
+  cellsH: number,
+  cols: number,
+  rows: number,
+  occupied: Set<string>,
+) {
+  const fits = (col: number, row: number) => {
+    if (col < 0 || row < 0 || col + cellsW > cols || row + cellsH > rows) return false
+    for (let c = col; c < col + cellsW; c++) for (let r = row; r < row + cellsH; r++) if (occupied.has(`${c},${r}`)) return false
+    return true
+  }
+  if (fits(startCol, startRow)) return { col: startCol, row: startRow }
+  const maxRing = cols + rows
+  for (let ring = 1; ring <= maxRing; ring++) {
+    for (let dc = -ring; dc <= ring; dc++) {
+      for (let dr = -ring; dr <= ring; dr++) {
+        if (Math.max(Math.abs(dc), Math.abs(dr)) !== ring) continue
+        if (fits(startCol + dc, startRow + dr)) return { col: startCol + dc, row: startRow + dr }
+      }
+    }
+  }
+  return null
 }
 
 export function EmulatorWindow() {
@@ -218,14 +271,21 @@ export function EmulatorWindow() {
       const nx = clamp(ox + ev.clientX - sx, 0, rect.width - w)
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - h)
       setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
-      const g = snapToGrid(rect, nx, ny, w, h)
-      setDropZone({ x: g.cellLeft, y: g.cellTop, w: g.cellW, h: g.cellH })
+      const s = snapToGrid(rect, nx, ny, w, h)
+      const occ = occupiedCells(rect, icons, widgets, id)
+      const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ) ?? { col: s.col, row: s.row }
+      const box = cellToBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH, w, h)
+      setDropZone({ x: box.cellLeft, y: box.cellTop, w: box.cellW, h: box.cellH })
     }
     const up = (ev: PointerEvent) => {
       const nx = clamp(ox + ev.clientX - sx, 0, rect.width - w)
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - h)
-      const g = snapToGrid(rect, nx, ny, w, h)
-      setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: g.x, y: g.y } : it)))
+      const s = snapToGrid(rect, nx, ny, w, h)
+      const occ = occupiedCells(rect, icons, widgets, id)
+      const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ)
+      const target = free ?? { col: s.col, row: s.row }
+      const box = cellToBox(target.col, target.row, s.cellsW, s.cellsH, s.cellW, s.cellH, w, h)
+      setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: box.x, y: box.y } : it)))
       setDropZone(null)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
@@ -248,14 +308,21 @@ export function EmulatorWindow() {
       const nx = clamp(ox + ev.clientX - sx, 0, rect.width - item.w)
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - item.h)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
-      const g = snapToGrid(rect, nx, ny, item.w, item.h)
-      setDropZone({ x: g.cellLeft, y: g.cellTop, w: g.cellW, h: g.cellH })
+      const s = snapToGrid(rect, nx, ny, item.w, item.h)
+      const occ = occupiedCells(rect, icons, widgets, id)
+      const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ) ?? { col: s.col, row: s.row }
+      const box = cellToBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH, item.w, item.h)
+      setDropZone({ x: box.cellLeft, y: box.cellTop, w: box.cellW, h: box.cellH })
     }
     const up = (ev: PointerEvent) => {
       const nx = clamp(ox + ev.clientX - sx, 0, rect.width - item.w)
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - item.h)
-      const g = snapToGrid(rect, nx, ny, item.w, item.h)
-      setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: g.x, y: g.y } : it)))
+      const s = snapToGrid(rect, nx, ny, item.w, item.h)
+      const occ = occupiedCells(rect, icons, widgets, id)
+      const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ)
+      const target = free ?? { col: s.col, row: s.row }
+      const box = cellToBox(target.col, target.row, s.cellsW, s.cellsH, s.cellW, s.cellH, item.w, item.h)
+      setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: box.x, y: box.y } : it)))
       setDropZone(null)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
@@ -302,8 +369,14 @@ export function EmulatorWindow() {
     const def = widgetDefaults[type]
     const id = `${type}-${Date.now()}`
     const rect = deskRef.current?.getBoundingClientRect()
-    const raw = { x: 40 + widgets.length * GRID, y: 40 + widgets.length * GRID }
-    const pos = rect ? snapToGrid(rect, raw.x, raw.y, def.w, def.h) : raw
+    let pos = { x: 40 + widgets.length * GRID, y: 40 + widgets.length * GRID }
+    if (rect) {
+      const s = snapToGrid(rect, pos.x, pos.y, def.w, def.h)
+      const occ = occupiedCells(rect, icons, widgets, id)
+      const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ) ?? { col: s.col, row: s.row }
+      const box = cellToBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH, def.w, def.h)
+      pos = { x: box.x, y: box.y }
+    }
     setWidgets((prev) => [
       ...prev,
       { id, type, x: pos.x, y: pos.y, w: def.w, h: def.h, text: type === "notes" ? "" : undefined },
@@ -347,7 +420,16 @@ export function EmulatorWindow() {
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, photo: crop.src, crop: sel, w, h } : it)))
     } else {
       const id = `photo-${Date.now()}`
-      setWidgets((prev) => [...prev, { id, type: "photo", x: snap(40), y: snap(40), w, h, photo: crop!.src, crop: sel }])
+      const rect = deskRef.current?.getBoundingClientRect()
+      let pos = { x: snap(40), y: snap(40) }
+      if (rect) {
+        const s = snapToGrid(rect, pos.x, pos.y, w, h)
+        const occ = occupiedCells(rect, icons, widgets, id)
+        const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ) ?? { col: s.col, row: s.row }
+        const box = cellToBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH, w, h)
+        pos = { x: box.x, y: box.y }
+      }
+      setWidgets((prev) => [...prev, { id, type: "photo", x: pos.x, y: pos.y, w, h, photo: crop!.src, crop: sel }])
     }
     setCropState(null)
   }
