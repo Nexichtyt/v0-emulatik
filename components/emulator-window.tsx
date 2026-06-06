@@ -23,17 +23,31 @@ import {
   Monitor,
   MousePointer2,
   Plus,
-  Clock,
   Cloud,
   Calendar,
-  Music,
   ImagePlus,
   Sparkles,
+  Layers,
+  StickyNote,
+  Check,
 } from "lucide-react"
 
 type IconItem = { id: string; name: string; icon: string; x: number; y: number }
-type WidgetType = "clock" | "weather" | "calendar" | "music" | "photo"
-type WidgetItem = { id: string; type: WidgetType; x: number; y: number; w: number; h: number; photo?: string }
+type WidgetType = "weather" | "calendar" | "notes" | "photo" | "photoPng"
+type Crop = { x: number; y: number; w: number; h: number }
+type WidgetItem = {
+  id: string
+  type: WidgetType
+  x: number
+  y: number
+  w: number
+  h: number
+  photo?: string
+  crop?: Crop
+  text?: string
+}
+
+const GRID = 20
 
 const initialApps: Omit<IconItem, "x" | "y">[] = [
   { id: "play", name: "Google Play", icon: "/icons/google-play.png" },
@@ -56,19 +70,19 @@ const wallpapers = [
 ]
 
 const widgetCatalog: { type: WidgetType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { type: "clock", label: "Часы", icon: Clock },
   { type: "weather", label: "Погода", icon: Cloud },
   { type: "calendar", label: "Календарь", icon: Calendar },
-  { type: "music", label: "Музыка", icon: Music },
-  { type: "photo", label: "Фото", icon: ImagePlus },
+  { type: "notes", label: "Заметки", icon: StickyNote },
+  { type: "photo", label: "Фото", icon: ImageIcon },
+  { type: "photoPng", label: "Фото PNG", icon: ImagePlus },
 ]
 
 const widgetDefaults: Record<WidgetType, { w: number; h: number }> = {
-  clock: { w: 170, h: 96 },
-  weather: { w: 170, h: 96 },
-  calendar: { w: 170, h: 96 },
-  music: { w: 200, h: 96 },
+  weather: { w: 180, h: 100 },
+  calendar: { w: 180, h: 100 },
+  notes: { w: 180, h: 160 },
   photo: { w: 180, h: 180 },
+  photoPng: { w: 140, h: 140 },
 }
 
 function useClock() {
@@ -106,6 +120,7 @@ function SLogo({ size }: { size: number }) {
 }
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
+const snap = (v: number) => Math.round(v / GRID) * GRID
 
 export function EmulatorWindow() {
   const [dark, setDark] = useState(true)
@@ -118,13 +133,14 @@ export function EmulatorWindow() {
     initialApps.map((a, i) => ({ ...a, x: 360 + i * 100, y: 250 })),
   )
   const [widgets, setWidgets] = useState<WidgetItem[]>([])
+  const [crop, setCropState] = useState<{ src: string; editId?: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const deskRef = useRef<HTMLDivElement>(null)
   const time = useClock()
 
   const activeWallpaper = customWallpaper ?? (dark ? wallpapers[0].value : wallpapers[1].value)
 
-  /* ---- drag & resize ---- */
+  /* ---- drag & resize (with snap on drop) ---- */
   function startDragIcon(e: React.PointerEvent, id: string, w: number, h: number) {
     e.preventDefault()
     const rect = deskRef.current?.getBoundingClientRect()
@@ -140,7 +156,10 @@ export function EmulatorWindow() {
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - h)
       setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
     }
-    const up = () => {
+    const up = (ev: PointerEvent) => {
+      const nx = clamp(snap(ox + ev.clientX - sx), 0, rect.width - w)
+      const ny = clamp(snap(oy + ev.clientY - sy), 0, rect.height - h)
+      setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
     }
@@ -163,7 +182,10 @@ export function EmulatorWindow() {
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - item.h)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
     }
-    const up = () => {
+    const up = (ev: PointerEvent) => {
+      const nx = clamp(snap(ox + ev.clientX - sx), 0, rect.width - item.w)
+      const ny = clamp(snap(oy + ev.clientY - sy), 0, rect.height - item.h)
+      setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
     }
@@ -181,11 +203,14 @@ export function EmulatorWindow() {
     const ow = item.w
     const oh = item.h
     const move = (ev: PointerEvent) => {
-      const nw = clamp(ow + ev.clientX - sx, 140, 380)
+      const nw = clamp(ow + ev.clientX - sx, 120, 380)
       const nh = clamp(oh + ev.clientY - sy, 90, 340)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, w: nw, h: nh } : it)))
     }
-    const up = () => {
+    const up = (ev: PointerEvent) => {
+      const nw = clamp(snap(ow + ev.clientX - sx), 120, 380)
+      const nh = clamp(snap(oh + ev.clientY - sy), 90, 340)
+      setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, w: nw, h: nh } : it)))
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
     }
@@ -194,26 +219,57 @@ export function EmulatorWindow() {
   }
 
   function addWidget(type: WidgetType) {
+    setMenu(null)
+    if (type === "photo") {
+      pickFile("image/*", (url) => setCropState({ src: url }))
+      return
+    }
     const def = widgetDefaults[type]
     const id = `${type}-${Date.now()}`
-    const offset = widgets.length * 16
-    setWidgets((prev) => [...prev, { id, type, x: 24 + offset, y: 24 + offset, w: def.w, h: def.h }])
-    setMenu(null)
-    if (type === "photo") setTimeout(() => pickPhoto(id), 50)
+    const offset = widgets.length * GRID
+    const pos = { x: snap(40 + offset), y: snap(40 + offset) }
+    setWidgets((prev) => [
+      ...prev,
+      { id, type, x: pos.x, y: pos.y, w: def.w, h: def.h, text: type === "notes" ? "" : undefined },
+    ])
+    if (type === "photoPng") setTimeout(() => pickFile("image/png", (url) => updatePhoto(id, url)), 50)
   }
 
-  function pickPhoto(id: string) {
+  function pickFile(accept: string, cb: (url: string) => void) {
     const input = document.createElement("input")
     input.type = "file"
-    input.accept = "image/*"
+    input.accept = accept
     input.onchange = () => {
       const f = input.files?.[0]
-      if (f) {
-        const url = URL.createObjectURL(f)
-        setWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, photo: url } : w)))
-      }
+      if (f) cb(URL.createObjectURL(f))
     }
     input.click()
+  }
+
+  function updatePhoto(id: string, url: string) {
+    setWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, photo: url } : w)))
+  }
+
+  function applyCrop(sel: Crop, aspect: number) {
+    let w = 200
+    let h = Math.round(w / aspect)
+    if (h > 280) {
+      h = 280
+      w = Math.round(h * aspect)
+    }
+    if (h < 90) {
+      h = 90
+      w = Math.round(h * aspect)
+    }
+    w = clamp(w, 120, 380)
+    if (crop?.editId) {
+      const id = crop.editId
+      setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, photo: crop.src, crop: sel, w, h } : it)))
+    } else {
+      const id = `photo-${Date.now()}`
+      setWidgets((prev) => [...prev, { id, type: "photo", x: snap(40), y: snap(40), w, h, photo: crop!.src, crop: sel }])
+    }
+    setCropState(null)
   }
 
   const onUploadWallpaper = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -244,9 +300,14 @@ export function EmulatorWindow() {
               <span className="h-3 w-3 rounded-full bg-[#28c840]" />
             </div>
           )}
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-[#a112d6] to-[#4f37d8] shadow-sm">
-            <SLogo size={22} />
-          </span>
+          <button
+            aria-label="Приложения"
+            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+              dark ? "text-white/70 hover:bg-white/10 hover:text-white" : "text-black/60 hover:bg-black/10 hover:text-black"
+            }`}
+          >
+            <Layers className="h-[18px] w-[18px]" />
+          </button>
         </div>
 
         {os === "win" && (
@@ -284,14 +345,10 @@ export function EmulatorWindow() {
             key={w.id}
             onPointerDown={(e) => startDragWidget(e, w.id)}
             style={{ left: w.x, top: w.y, width: w.w, height: w.h }}
-            className="group absolute cursor-grab overflow-hidden rounded-2xl bg-black/35 backdrop-blur-md ring-1 ring-white/10 active:cursor-grabbing"
+            className={`group absolute cursor-grab overflow-hidden rounded-2xl active:cursor-grabbing ${
+              w.type === "photoPng" ? "" : "bg-black/35 backdrop-blur-md ring-1 ring-white/10"
+            }`}
           >
-            {w.type === "clock" && (
-              <div className="flex h-full flex-col justify-center p-4">
-                <p className="text-3xl font-semibold tabular-nums text-white">{time}</p>
-                <p className="text-xs text-white/60">Сегодня</p>
-              </div>
-            )}
             {w.type === "weather" && (
               <div className="flex h-full items-center gap-3 p-4">
                 <Cloud className="h-8 w-8 shrink-0 text-white/80" />
@@ -309,30 +366,74 @@ export function EmulatorWindow() {
                 </p>
               </div>
             )}
-            {w.type === "music" && (
-              <div className="flex h-full items-center gap-3 p-4">
-                <Music className="h-8 w-8 shrink-0 text-white/80" />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-white">Now Playing</p>
-                  <p className="truncate text-xs text-white/60">S Elite Radio</p>
+            {w.type === "notes" && (
+              <div className="flex h-full flex-col">
+                <div className="flex items-center gap-1.5 px-3 pt-2.5 text-[#e779f5]">
+                  <StickyNote className="h-3.5 w-3.5" />
+                  <span className="text-[11px] font-semibold">Заметка</span>
                 </div>
+                <textarea
+                  defaultValue={w.text}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onChange={(e) =>
+                    setWidgets((prev) => prev.map((it) => (it.id === w.id ? { ...it, text: e.target.value } : it)))
+                  }
+                  placeholder="Записать..."
+                  className="flex-1 resize-none bg-transparent px-3 py-2 text-xs leading-relaxed text-white outline-none placeholder:text-white/40"
+                />
               </div>
             )}
             {w.type === "photo" && (
               <div className="relative h-full w-full">
                 {w.photo ? (
-                  <img src={w.photo || "/placeholder.svg"} alt="Виджет фото" className="pointer-events-none h-full w-full object-cover" />
+                  w.crop ? (
+                    <img
+                      src={w.photo || "/placeholder.svg"}
+                      alt="Виджет фото"
+                      className="pointer-events-none"
+                      style={{
+                        position: "absolute",
+                        maxWidth: "none",
+                        width: `${100 / w.crop.w}%`,
+                        height: `${100 / w.crop.h}%`,
+                        left: `${(-w.crop.x * 100) / w.crop.w}%`,
+                        top: `${(-w.crop.y * 100) / w.crop.h}%`,
+                      }}
+                    />
+                  ) : (
+                    <img src={w.photo || "/placeholder.svg"} alt="Виджет фото" className="pointer-events-none h-full w-full object-cover" />
+                  )
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2 text-white/60">
-                    <ImagePlus className="h-7 w-7" />
-                    <span className="text-xs">Добавить фото</span>
+                    <ImageIcon className="h-7 w-7" />
+                    <span className="text-xs">Фото</span>
                   </div>
                 )}
                 <button
                   onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => pickPhoto(w.id)}
+                  onClick={() => pickFile("image/*", (url) => setCropState({ src: url, editId: w.id }))}
                   className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-md transition-opacity hover:bg-black/75 group-hover:opacity-100"
                   aria-label="Сменить фото"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            {w.type === "photoPng" && (
+              <div className="relative h-full w-full">
+                {w.photo ? (
+                  <img src={w.photo || "/placeholder.svg"} alt="Виджет PNG" className="pointer-events-none h-full w-full object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]" />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 rounded-2xl bg-black/25 text-white/60 ring-1 ring-dashed ring-white/20">
+                    <ImagePlus className="h-7 w-7" />
+                    <span className="text-xs">PNG</span>
+                  </div>
+                )}
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => pickFile("image/png", (url) => updatePhoto(w.id, url))}
+                  className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-md transition-opacity hover:bg-black/75 group-hover:opacity-100"
+                  aria-label="Сменить PNG"
                 >
                   <ImagePlus className="h-4 w-4" />
                 </button>
@@ -341,7 +442,7 @@ export function EmulatorWindow() {
             {/* resize handle */}
             <span
               onPointerDown={(e) => startResize(e, w.id)}
-              className="absolute bottom-0 right-0 h-5 w-5 cursor-nwse-resize opacity-0 transition-opacity group-hover:opacity-100"
+              className="absolute bottom-0 right-0 z-10 h-5 w-5 cursor-nwse-resize opacity-0 transition-opacity group-hover:opacity-100"
             >
               <span className="absolute bottom-1.5 right-1.5 h-2 w-2 border-b-2 border-r-2 border-white/70" />
             </span>
@@ -584,6 +685,9 @@ export function EmulatorWindow() {
             </div>
           </div>
         )}
+
+        {/* Photo crop / zone selector */}
+        {crop && <CropModal src={crop.src} onCancel={() => setCropState(null)} onApply={applyCrop} />}
       </div>
     </div>
   )
@@ -659,5 +763,151 @@ function OsCard({ kind, active, onClick }: { kind: "win" | "mac"; active: boolea
       </span>
       <span className="text-xs font-medium text-white">{kind === "win" ? "Windows" : "macOS"}</span>
     </button>
+  )
+}
+
+/* Lets the user pick the visible region of a photo. The chosen zone defines the
+   widget's aspect ratio (and thus its size); afterwards it can be freely moved/resized. */
+function CropModal({ src, onCancel, onApply }: { src: string; onCancel: () => void; onApply: (sel: Crop, aspect: number) => void }) {
+  const [sel, setSel] = useState<Crop>({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 })
+  const nat = useRef({ w: 1, h: 1 })
+  const boxRef = useRef<HTMLDivElement>(null)
+
+  function startMove(e: React.PointerEvent) {
+    e.preventDefault()
+    const rect = boxRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const sx = e.clientX
+    const sy = e.clientY
+    const o = { ...sel }
+    const move = (ev: PointerEvent) => {
+      const nx = clamp(o.x + (ev.clientX - sx) / rect.width, 0, 1 - o.w)
+      const ny = clamp(o.y + (ev.clientY - sy) / rect.height, 0, 1 - o.h)
+      setSel((s) => ({ ...s, x: nx, y: ny }))
+    }
+    const up = () => {
+      window.removeEventListener("pointermove", move)
+      window.removeEventListener("pointerup", up)
+    }
+    window.addEventListener("pointermove", move)
+    window.addEventListener("pointerup", up)
+  }
+
+  function startResize(e: React.PointerEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = boxRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const sx = e.clientX
+    const sy = e.clientY
+    const o = { ...sel }
+    const move = (ev: PointerEvent) => {
+      const nw = clamp(o.w + (ev.clientX - sx) / rect.width, 0.15, 1 - o.x)
+      const nh = clamp(o.h + (ev.clientY - sy) / rect.height, 0.15, 1 - o.y)
+      setSel((s) => ({ ...s, w: nw, h: nh }))
+    }
+    const up = () => {
+      window.removeEventListener("pointermove", move)
+      window.removeEventListener("pointerup", up)
+    }
+    window.addEventListener("pointermove", move)
+    window.addEventListener("pointerup", up)
+  }
+
+  function preset(aspect: number) {
+    // aspect = w/h in pixels; convert to fraction box centered in the image
+    const r = (aspect * nat.current.h) / nat.current.w // selW/selH in fractions
+    let h = 0.8
+    let w = h * r
+    if (w > 1) {
+      w = 1
+      h = w / r
+    }
+    setSel({ x: (1 - w) / 2, y: (1 - h) / 2, w, h })
+  }
+
+  const aspect = (sel.w * nat.current.w) / (sel.h * nat.current.h)
+
+  return (
+    <div className="absolute inset-0 z-[60] flex items-center justify-center p-6">
+      <button aria-label="Отмена" onClick={onCancel} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl bg-[#16161e]/95 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
+          <h2 className="text-sm font-semibold text-white">Выберите зону</h2>
+          <button
+            onClick={onCancel}
+            aria-label="Закрыть"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5">
+          <div ref={boxRef} className="relative mx-auto w-fit select-none overflow-hidden rounded-lg">
+            <img
+              src={src || "/placeholder.svg"}
+              alt="Кадрирование"
+              onLoad={(e) => {
+                nat.current = { w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight }
+              }}
+              className="pointer-events-none max-h-[280px] w-auto max-w-full"
+            />
+            {/* dimmed mask */}
+            <div className="pointer-events-none absolute inset-0 bg-black/50" />
+            {/* selection window */}
+            <div
+              onPointerDown={startMove}
+              style={{
+                left: `${sel.x * 100}%`,
+                top: `${sel.y * 100}%`,
+                width: `${sel.w * 100}%`,
+                height: `${sel.h * 100}%`,
+              }}
+              className="absolute cursor-move overflow-hidden ring-2 ring-white"
+            >
+              <img
+                src={src || "/placeholder.svg"}
+                alt=""
+                className="pointer-events-none absolute"
+                style={{
+                  maxWidth: "none",
+                  width: `${100 / sel.w}%`,
+                  height: `${100 / sel.h}%`,
+                  left: `${(-sel.x * 100) / sel.w}%`,
+                  top: `${(-sel.y * 100) / sel.h}%`,
+                }}
+              />
+              <span
+                onPointerDown={startResize}
+                className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize bg-white"
+                style={{ clipPath: "polygon(100% 0, 100% 100%, 0 100%)" }}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center gap-2">
+            <span className="text-[11px] text-white/50">Формат:</span>
+            <button onClick={() => preset(1)} className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] text-white/80 ring-1 ring-white/10 hover:bg-white/10">1:1</button>
+            <button onClick={() => preset(4 / 3)} className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] text-white/80 ring-1 ring-white/10 hover:bg-white/10">4:3</button>
+            <button onClick={() => preset(16 / 9)} className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] text-white/80 ring-1 ring-white/10 hover:bg-white/10">16:9</button>
+            <button onClick={() => preset(9 / 16)} className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] text-white/80 ring-1 ring-white/10 hover:bg-white/10">9:16</button>
+          </div>
+
+          <div className="mt-4 flex justify-end gap-2">
+            <button onClick={onCancel} className="rounded-lg bg-white/5 px-4 py-2 text-xs font-medium text-white/80 ring-1 ring-white/10 transition-colors hover:bg-white/10">
+              Отмена
+            </button>
+            <button
+              onClick={() => onApply(sel, aspect)}
+              className="flex items-center gap-1.5 rounded-lg bg-white/90 px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-white"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Применить
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
