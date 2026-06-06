@@ -30,6 +30,7 @@ import {
   Layers,
   StickyNote,
   Check,
+  Trash2,
 } from "lucide-react"
 
 type IconItem = { id: string; name: string; icon: string; x: number; y: number }
@@ -133,6 +134,7 @@ export function EmulatorWindow() {
     initialApps.map((a, i) => ({ ...a, x: 360 + i * 100, y: 250 })),
   )
   const [widgets, setWidgets] = useState<WidgetItem[]>([])
+  const [showGrid, setShowGrid] = useState(false)
   const [crop, setCropState] = useState<{ src: string; editId?: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const deskRef = useRef<HTMLDivElement>(null)
@@ -147,6 +149,7 @@ export function EmulatorWindow() {
     if (!rect) return
     const item = icons.find((i) => i.id === id)
     if (!item) return
+    setShowGrid(true)
     const sx = e.clientX
     const sy = e.clientY
     const ox = item.x
@@ -160,6 +163,7 @@ export function EmulatorWindow() {
       const nx = clamp(snap(ox + ev.clientX - sx), 0, rect.width - w)
       const ny = clamp(snap(oy + ev.clientY - sy), 0, rect.height - h)
       setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
+      setShowGrid(false)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
     }
@@ -173,6 +177,7 @@ export function EmulatorWindow() {
     if (!rect) return
     const item = widgets.find((i) => i.id === id)
     if (!item) return
+    setShowGrid(true)
     const sx = e.clientX
     const sy = e.clientY
     const ox = item.x
@@ -186,6 +191,7 @@ export function EmulatorWindow() {
       const nx = clamp(snap(ox + ev.clientX - sx), 0, rect.width - item.w)
       const ny = clamp(snap(oy + ev.clientY - sy), 0, rect.height - item.h)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
+      setShowGrid(false)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
     }
@@ -198,6 +204,7 @@ export function EmulatorWindow() {
     e.stopPropagation()
     const item = widgets.find((i) => i.id === id)
     if (!item) return
+    setShowGrid(true)
     const sx = e.clientX
     const sy = e.clientY
     const ow = item.w
@@ -211,6 +218,7 @@ export function EmulatorWindow() {
       const nw = clamp(snap(ow + ev.clientX - sx), 120, 380)
       const nh = clamp(snap(oh + ev.clientY - sy), 90, 340)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, w: nw, h: nh } : it)))
+      setShowGrid(false)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
     }
@@ -233,6 +241,10 @@ export function EmulatorWindow() {
       { id, type, x: pos.x, y: pos.y, w: def.w, h: def.h, text: type === "notes" ? "" : undefined },
     ])
     if (type === "photoPng") setTimeout(() => pickFile("image/png", (url) => updatePhoto(id, url)), 50)
+  }
+
+  function removeWidget(id: string) {
+    setWidgets((prev) => prev.filter((w) => w.id !== id))
   }
 
   function pickFile(accept: string, cb: (url: string) => void) {
@@ -323,6 +335,18 @@ export function EmulatorWindow() {
       {/* Desktop / wallpaper */}
       <div ref={deskRef} className="relative flex-1 touch-none overflow-hidden">
         <div className="absolute inset-0 transition-all duration-500" style={{ background: activeWallpaper }} />
+
+        {/* Grid overlay (visible while dragging/resizing) */}
+        <div
+          className={`pointer-events-none absolute inset-0 z-[1] transition-opacity duration-200 ${
+            showGrid ? "opacity-100" : "opacity-0"
+          }`}
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, rgba(255,255,255,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.12) 1px, transparent 1px)",
+            backgroundSize: `${GRID}px ${GRID}px`,
+          }}
+        />
 
         {/* Draggable app icons */}
         {icons.map((app) => (
@@ -439,6 +463,15 @@ export function EmulatorWindow() {
                 </button>
               </div>
             )}
+            {/* delete button */}
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => removeWidget(w.id)}
+              className="absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-md transition-opacity hover:bg-red-500/80 group-hover:opacity-100"
+              aria-label="Удалить виджет"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
             {/* resize handle */}
             <span
               onPointerDown={(e) => startResize(e, w.id)}
