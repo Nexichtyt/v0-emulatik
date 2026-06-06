@@ -100,23 +100,14 @@ function useClock() {
   return time
 }
 
-/* Crops the S-Elite logo down to just the crowned "S" (removes the "Elite" wordmark) */
+/* Crowned "S" brand mark */
 function SLogo({ size }: { size: number }) {
   return (
-    <div className="relative overflow-hidden" style={{ width: size, height: size }}>
-      <img
-        src="/logo-s-elite.png"
-        alt="S Elite"
-        style={{
-          position: "absolute",
-          width: size * 2,
-          height: size * 2,
-          maxWidth: "none",
-          left: -0.5 * size,
-          top: -0.367 * size,
-        }}
-      />
-    </div>
+    <img
+      src="/logo-s-crown.png"
+      alt="S Elite"
+      style={{ width: size, height: size, objectFit: "contain" }}
+    />
   )
 }
 
@@ -131,7 +122,10 @@ const DOCK_RESERVE = 120
 function gridInfo(width: number, height: number) {
   const innerW = width - PAD * 2
   const innerH = height - PAD * 2 - DOCK_RESERVE
-  const cols = Math.max(1, Math.round(innerW / GRID))
+  // force an even number of columns so the screen center falls on a cell
+  // boundary -> the gap between the 2nd and 3rd app can sit dead center
+  let cols = Math.max(2, Math.round(innerW / GRID))
+  if (cols % 2 !== 0) cols += 1
   const rows = Math.max(1, Math.round(innerH / GRID))
   const cellW = innerW / cols
   const cellH = innerH / rows
@@ -719,7 +713,7 @@ export function EmulatorWindow() {
 
               <DockButton
                 icon={Link2}
-                label="Присоединиться по ссылке"
+                label="Пр��соединиться по ссылке"
                 active={menu === "link"}
                 onClick={() => setMenu((m) => (m === "link" ? null : "link"))}
               >
