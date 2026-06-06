@@ -48,7 +48,7 @@ type WidgetItem = {
   text?: string
 }
 
-const GRID = 20
+const GRID = 100
 
 const initialApps: Omit<IconItem, "x" | "y">[] = [
   { id: "play", name: "Google Play", icon: "/icons/google-play.png" },
