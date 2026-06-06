@@ -117,7 +117,7 @@ const snap = (v: number) => Math.round(v / GRID) * GRID
 /* iOS-style grid: fixed ~25px padding on every edge, cell size flexes so the
    columns/rows fill the desktop evenly. The dock area at the bottom is reserved. */
 const PAD = 25
-const DOCK_RESERVE = 120
+const DOCK_RESERVE = 90
 
 function gridInfo(width: number, height: number) {
   const innerW = width - PAD * 2
