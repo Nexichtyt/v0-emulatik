@@ -134,7 +134,7 @@ export function EmulatorWindow() {
     initialApps.map((a, i) => ({ ...a, x: 360 + i * 100, y: 250 })),
   )
   const [widgets, setWidgets] = useState<WidgetItem[]>([])
-  const [showGrid, setShowGrid] = useState(false)
+  const [dropZone, setDropZone] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [crop, setCropState] = useState<{ src: string; editId?: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const deskRef = useRef<HTMLDivElement>(null)
@@ -149,7 +149,6 @@ export function EmulatorWindow() {
     if (!rect) return
     const item = icons.find((i) => i.id === id)
     if (!item) return
-    setShowGrid(true)
     const sx = e.clientX
     const sy = e.clientY
     const ox = item.x
@@ -158,12 +157,18 @@ export function EmulatorWindow() {
       const nx = clamp(ox + ev.clientX - sx, 0, rect.width - w)
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - h)
       setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
+      setDropZone({
+        x: clamp(snap(nx), 0, rect.width - w),
+        y: clamp(snap(ny), 0, rect.height - h),
+        w,
+        h,
+      })
     }
     const up = (ev: PointerEvent) => {
       const nx = clamp(snap(ox + ev.clientX - sx), 0, rect.width - w)
       const ny = clamp(snap(oy + ev.clientY - sy), 0, rect.height - h)
       setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
-      setShowGrid(false)
+      setDropZone(null)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
     }
@@ -177,7 +182,6 @@ export function EmulatorWindow() {
     if (!rect) return
     const item = widgets.find((i) => i.id === id)
     if (!item) return
-    setShowGrid(true)
     const sx = e.clientX
     const sy = e.clientY
     const ox = item.x
@@ -186,12 +190,18 @@ export function EmulatorWindow() {
       const nx = clamp(ox + ev.clientX - sx, 0, rect.width - item.w)
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - item.h)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
+      setDropZone({
+        x: clamp(snap(nx), 0, rect.width - item.w),
+        y: clamp(snap(ny), 0, rect.height - item.h),
+        w: item.w,
+        h: item.h,
+      })
     }
     const up = (ev: PointerEvent) => {
       const nx = clamp(snap(ox + ev.clientX - sx), 0, rect.width - item.w)
       const ny = clamp(snap(oy + ev.clientY - sy), 0, rect.height - item.h)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
-      setShowGrid(false)
+      setDropZone(null)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
     }
@@ -204,7 +214,6 @@ export function EmulatorWindow() {
     e.stopPropagation()
     const item = widgets.find((i) => i.id === id)
     if (!item) return
-    setShowGrid(true)
     const sx = e.clientX
     const sy = e.clientY
     const ow = item.w
@@ -213,12 +222,13 @@ export function EmulatorWindow() {
       const nw = clamp(ow + ev.clientX - sx, 120, 380)
       const nh = clamp(oh + ev.clientY - sy, 90, 340)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, w: nw, h: nh } : it)))
+      setDropZone({ x: item.x, y: item.y, w: clamp(snap(nw), 120, 380), h: clamp(snap(nh), 90, 340) })
     }
     const up = (ev: PointerEvent) => {
       const nw = clamp(snap(ow + ev.clientX - sx), 120, 380)
       const nh = clamp(snap(oh + ev.clientY - sy), 90, 340)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, w: nw, h: nh } : it)))
-      setShowGrid(false)
+      setDropZone(null)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
     }
@@ -336,17 +346,19 @@ export function EmulatorWindow() {
       <div ref={deskRef} className="relative flex-1 touch-none overflow-hidden">
         <div className="absolute inset-0 transition-all duration-500" style={{ background: activeWallpaper }} />
 
-        {/* Grid overlay (visible while dragging/resizing) */}
-        <div
-          className={`pointer-events-none absolute inset-0 z-[1] transition-opacity duration-200 ${
-            showGrid ? "opacity-100" : "opacity-0"
-          }`}
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, rgba(255,255,255,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.12) 1px, transparent 1px)",
-            backgroundSize: `${GRID}px ${GRID}px`,
-          }}
-        />
+        {/* Drop zone highlight (only the cell where the item will land) */}
+        {dropZone && (
+          <div
+            className="pointer-events-none absolute z-[1] rounded-2xl border-2 border-white/60 bg-white/10 backdrop-blur-[1px]"
+            style={{
+              left: dropZone.x,
+              top: dropZone.y,
+              width: dropZone.w,
+              height: dropZone.h,
+              boxShadow: "0 0 0 1px rgba(0,0,0,0.15), inset 0 0 20px rgba(255,255,255,0.15)",
+            }}
+          />
+        )}
 
         {/* Draggable app icons */}
         {icons.map((app) => (
