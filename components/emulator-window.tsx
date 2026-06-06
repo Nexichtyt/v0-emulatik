@@ -669,8 +669,8 @@ export function EmulatorWindow() {
             </button>
           </div>
 
-          {/* Dock capsule */}
-          <div className="flex h-14 items-center gap-2 rounded-full bg-black/35 px-3 backdrop-blur-md">
+          {/* Dock capsule - absolutely centered on screen */}
+          <div className="absolute bottom-6 left-1/2 flex h-14 -translate-x-1/2 items-center gap-2 rounded-full bg-black/35 px-3 backdrop-blur-md">
             <div className="flex items-center gap-1">
               <DockButton icon={Users} label="Конфиги игроков" onClick={() => setModal("configs")} />
 
