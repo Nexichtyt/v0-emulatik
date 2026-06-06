@@ -123,37 +123,44 @@ function SLogo({ size }: { size: number }) {
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 const snap = (v: number) => Math.round(v / GRID) * GRID
 
-/* iOS-style centered grid: equal margins on every edge, snaps the element's
-   center to the nearest cell center so spacing is identical across the desktop. */
+/* iOS-style grid: fixed ~25px padding on every edge, cell size flexes so the
+   columns/rows fill the desktop evenly. The dock area at the bottom is reserved. */
+const PAD = 25
+const DOCK_RESERVE = 120
+
 function gridInfo(width: number, height: number) {
-  const cols = Math.max(1, Math.floor(width / GRID))
-  const rows = Math.max(1, Math.floor(height / GRID))
-  const marginX = (width - cols * GRID) / 2
-  const marginY = (height - rows * GRID) / 2
-  return { cols, rows, marginX, marginY }
+  const innerW = width - PAD * 2
+  const innerH = height - PAD * 2 - DOCK_RESERVE
+  const cols = Math.max(1, Math.round(innerW / GRID))
+  const rows = Math.max(1, Math.round(innerH / GRID))
+  const cellW = innerW / cols
+  const cellH = innerH / rows
+  return { cols, rows, cellW, cellH }
 }
 
 function snapToGrid(rect: { width: number; height: number }, x: number, y: number, w: number, h: number) {
-  const { cols, rows, marginX, marginY } = gridInfo(rect.width, rect.height)
-  const cellsW = Math.max(1, Math.round(w / GRID))
-  const cellsH = Math.max(1, Math.round(h / GRID))
+  const { cols, rows, cellW, cellH } = gridInfo(rect.width, rect.height)
+  const cellsW = Math.max(1, Math.round(w / cellW))
+  const cellsH = Math.max(1, Math.round(h / cellH))
   const cx = x + w / 2
   const cy = y + h / 2
   // top-left cell index the element should occupy, keeping it fully on-grid
-  let col = Math.round((cx - marginX - (cellsW * GRID) / 2) / GRID)
-  let row = Math.round((cy - marginY - (cellsH * GRID) / 2) / GRID)
+  let col = Math.round((cx - PAD - (cellsW * cellW) / 2) / cellW)
+  let row = Math.round((cy - PAD - (cellsH * cellH) / 2) / cellH)
   col = clamp(col, 0, cols - cellsW)
   row = clamp(row, 0, rows - cellsH)
-  const cellLeft = marginX + col * GRID
-  const cellTop = marginY + row * GRID
+  const cellLeft = PAD + col * cellW
+  const cellTop = PAD + row * cellH
+  const blockW = cellsW * cellW
+  const blockH = cellsH * cellH
   // center the element inside the cells it occupies
   return {
-    x: cellLeft + (cellsW * GRID - w) / 2,
-    y: cellTop + (cellsH * GRID - h) / 2,
+    x: cellLeft + (blockW - w) / 2,
+    y: cellTop + (blockH - h) / 2,
     cellLeft,
     cellTop,
-    cellW: cellsW * GRID,
-    cellH: cellsH * GRID,
+    cellW: blockW,
+    cellH: blockH,
   }
 }
 
@@ -180,16 +187,17 @@ export function EmulatorWindow() {
   useEffect(() => {
     const rect = deskRef.current?.getBoundingClientRect()
     if (!rect) return
-    const { cols, rows, marginX, marginY } = gridInfo(rect.width, rect.height)
+    const { cols, rows, cellW, cellH } = gridInfo(rect.width, rect.height)
     const iconW = 80
     const iconH = 88
-    const startCol = Math.max(0, Math.floor((cols - initialApps.length) / 2))
-    const row = Math.max(0, Math.floor(rows / 2))
+    const n = initialApps.length
+    const startCol = Math.max(0, Math.round((cols - n) / 2))
+    const row = Math.max(0, Math.round(rows / 2) - 1)
     setIcons((prev) =>
       prev.map((it, i) => ({
         ...it,
-        x: marginX + (startCol + i) * GRID + (GRID - iconW) / 2,
-        y: marginY + row * GRID + (GRID - iconH) / 2,
+        x: PAD + (startCol + i) * cellW + (cellW - iconW) / 2,
+        y: PAD + row * cellH + (cellH - iconH) / 2,
       })),
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
