@@ -79,11 +79,11 @@ const widgetCatalog: { type: WidgetType; label: string; icon: React.ComponentTyp
 ]
 
 const widgetDefaults: Record<WidgetType, { w: number; h: number }> = {
-  weather: { w: 180, h: 100 },
-  calendar: { w: 180, h: 100 },
-  notes: { w: 180, h: 160 },
-  photo: { w: 180, h: 180 },
-  photoPng: { w: 140, h: 140 },
+  weather: { w: 200, h: 100 },
+  calendar: { w: 200, h: 100 },
+  notes: { w: 200, h: 200 },
+  photo: { w: 200, h: 200 },
+  photoPng: { w: 100, h: 100 },
 }
 
 function useClock() {
@@ -123,6 +123,40 @@ function SLogo({ size }: { size: number }) {
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 const snap = (v: number) => Math.round(v / GRID) * GRID
 
+/* iOS-style centered grid: equal margins on every edge, snaps the element's
+   center to the nearest cell center so spacing is identical across the desktop. */
+function gridInfo(width: number, height: number) {
+  const cols = Math.max(1, Math.floor(width / GRID))
+  const rows = Math.max(1, Math.floor(height / GRID))
+  const marginX = (width - cols * GRID) / 2
+  const marginY = (height - rows * GRID) / 2
+  return { cols, rows, marginX, marginY }
+}
+
+function snapToGrid(rect: { width: number; height: number }, x: number, y: number, w: number, h: number) {
+  const { cols, rows, marginX, marginY } = gridInfo(rect.width, rect.height)
+  const cellsW = Math.max(1, Math.round(w / GRID))
+  const cellsH = Math.max(1, Math.round(h / GRID))
+  const cx = x + w / 2
+  const cy = y + h / 2
+  // top-left cell index the element should occupy, keeping it fully on-grid
+  let col = Math.round((cx - marginX - (cellsW * GRID) / 2) / GRID)
+  let row = Math.round((cy - marginY - (cellsH * GRID) / 2) / GRID)
+  col = clamp(col, 0, cols - cellsW)
+  row = clamp(row, 0, rows - cellsH)
+  const cellLeft = marginX + col * GRID
+  const cellTop = marginY + row * GRID
+  // center the element inside the cells it occupies
+  return {
+    x: cellLeft + (cellsW * GRID - w) / 2,
+    y: cellTop + (cellsH * GRID - h) / 2,
+    cellLeft,
+    cellTop,
+    cellW: cellsW * GRID,
+    cellH: cellsH * GRID,
+  }
+}
+
 export function EmulatorWindow() {
   const [dark, setDark] = useState(true)
   const [os, setOs] = useState<"win" | "mac">("win")
@@ -142,6 +176,25 @@ export function EmulatorWindow() {
 
   const activeWallpaper = customWallpaper ?? (dark ? wallpapers[0].value : wallpapers[1].value)
 
+  /* Align the initial app icons to the centered grid once the desktop is measured */
+  useEffect(() => {
+    const rect = deskRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const { cols, rows, marginX, marginY } = gridInfo(rect.width, rect.height)
+    const iconW = 80
+    const iconH = 88
+    const startCol = Math.max(0, Math.floor((cols - initialApps.length) / 2))
+    const row = Math.max(0, Math.floor(rows / 2))
+    setIcons((prev) =>
+      prev.map((it, i) => ({
+        ...it,
+        x: marginX + (startCol + i) * GRID + (GRID - iconW) / 2,
+        y: marginY + row * GRID + (GRID - iconH) / 2,
+      })),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   /* ---- drag & resize (with snap on drop) ---- */
   function startDragIcon(e: React.PointerEvent, id: string, w: number, h: number) {
     e.preventDefault()
@@ -157,17 +210,14 @@ export function EmulatorWindow() {
       const nx = clamp(ox + ev.clientX - sx, 0, rect.width - w)
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - h)
       setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
-      setDropZone({
-        x: clamp(snap(nx), 0, rect.width - w),
-        y: clamp(snap(ny), 0, rect.height - h),
-        w,
-        h,
-      })
+      const g = snapToGrid(rect, nx, ny, w, h)
+      setDropZone({ x: g.cellLeft, y: g.cellTop, w: g.cellW, h: g.cellH })
     }
     const up = (ev: PointerEvent) => {
-      const nx = clamp(snap(ox + ev.clientX - sx), 0, rect.width - w)
-      const ny = clamp(snap(oy + ev.clientY - sy), 0, rect.height - h)
-      setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
+      const nx = clamp(ox + ev.clientX - sx, 0, rect.width - w)
+      const ny = clamp(oy + ev.clientY - sy, 0, rect.height - h)
+      const g = snapToGrid(rect, nx, ny, w, h)
+      setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: g.x, y: g.y } : it)))
       setDropZone(null)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
@@ -190,17 +240,14 @@ export function EmulatorWindow() {
       const nx = clamp(ox + ev.clientX - sx, 0, rect.width - item.w)
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - item.h)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
-      setDropZone({
-        x: clamp(snap(nx), 0, rect.width - item.w),
-        y: clamp(snap(ny), 0, rect.height - item.h),
-        w: item.w,
-        h: item.h,
-      })
+      const g = snapToGrid(rect, nx, ny, item.w, item.h)
+      setDropZone({ x: g.cellLeft, y: g.cellTop, w: g.cellW, h: g.cellH })
     }
     const up = (ev: PointerEvent) => {
-      const nx = clamp(snap(ox + ev.clientX - sx), 0, rect.width - item.w)
-      const ny = clamp(snap(oy + ev.clientY - sy), 0, rect.height - item.h)
-      setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
+      const nx = clamp(ox + ev.clientX - sx, 0, rect.width - item.w)
+      const ny = clamp(oy + ev.clientY - sy, 0, rect.height - item.h)
+      const g = snapToGrid(rect, nx, ny, item.w, item.h)
+      setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: g.x, y: g.y } : it)))
       setDropZone(null)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
@@ -219,14 +266,16 @@ export function EmulatorWindow() {
     const ow = item.w
     const oh = item.h
     const move = (ev: PointerEvent) => {
-      const nw = clamp(ow + ev.clientX - sx, 120, 380)
-      const nh = clamp(oh + ev.clientY - sy, 90, 340)
+      const nw = clamp(ow + ev.clientX - sx, GRID, GRID * 4)
+      const nh = clamp(oh + ev.clientY - sy, GRID, GRID * 4)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, w: nw, h: nh } : it)))
-      setDropZone({ x: item.x, y: item.y, w: clamp(snap(nw), 120, 380), h: clamp(snap(nh), 90, 340) })
+      const cw = clamp(snap(nw), GRID, GRID * 4)
+      const ch = clamp(snap(nh), GRID, GRID * 4)
+      setDropZone({ x: item.x, y: item.y, w: cw, h: ch })
     }
     const up = (ev: PointerEvent) => {
-      const nw = clamp(snap(ow + ev.clientX - sx), 120, 380)
-      const nh = clamp(snap(oh + ev.clientY - sy), 90, 340)
+      const nw = clamp(snap(ow + ev.clientX - sx), GRID, GRID * 4)
+      const nh = clamp(snap(oh + ev.clientY - sy), GRID, GRID * 4)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, w: nw, h: nh } : it)))
       setDropZone(null)
       window.removeEventListener("pointermove", move)
@@ -244,8 +293,9 @@ export function EmulatorWindow() {
     }
     const def = widgetDefaults[type]
     const id = `${type}-${Date.now()}`
-    const offset = widgets.length * GRID
-    const pos = { x: snap(40 + offset), y: snap(40 + offset) }
+    const rect = deskRef.current?.getBoundingClientRect()
+    const raw = { x: 40 + widgets.length * GRID, y: 40 + widgets.length * GRID }
+    const pos = rect ? snapToGrid(rect, raw.x, raw.y, def.w, def.h) : raw
     setWidgets((prev) => [
       ...prev,
       { id, type, x: pos.x, y: pos.y, w: def.w, h: def.h, text: type === "notes" ? "" : undefined },
