@@ -216,7 +216,7 @@ export function EmulatorWindow() {
   const [dark, setDark] = useState(true)
   const [os, setOs] = useState<"win" | "mac">("win")
   const [modal, setModal] = useState<null | "configs">(null)
-  const [menu, setMenu] = useState<null | "wallpaper" | "link" | "widget" | "os">(null)
+  const [menu, setMenu] = useState<null | "wallpaper" | "link" | "widget" | "os" | "snap">(null)
   const [customWallpaper, setCustomWallpaper] = useState<string | null>(null)
   const [linkValue, setLinkValue] = useState("")
   const [icons, setIcons] = useState<IconItem[]>(
@@ -690,13 +690,6 @@ export function EmulatorWindow() {
             className="absolute bottom-6 left-1/2 flex h-14 -translate-x-1/2 items-center gap-2 rounded-full bg-black/35 px-3 backdrop-blur-md"
           >
             <div className="flex items-center gap-1">
-              <DockButton
-                icon={Magnet}
-                label={snapEnabled ? "Привязка к сетке: вкл" : "Привязка к сетке: выкл"}
-                active={snapEnabled}
-                onClick={() => setSnapEnabled((s) => !s)}
-              />
-
               <DockButton icon={Users} label="Конфиги игроков" onClick={() => setModal("configs")} />
 
               <DockButton
@@ -799,6 +792,36 @@ export function EmulatorWindow() {
               </DockButton>
 
               <DockButton icon={MessageCircle} label="Чат в Telegram" onClick={() => window.open("https://t.me/", "_blank")} />
+
+              <DockButton
+                icon={Magnet}
+                label="Привязка к сетке"
+                active={menu === "snap"}
+                onClick={() => setMenu((m) => (m === "snap" ? null : "snap"))}
+              >
+                {menu === "snap" && (
+                  <Popover title="Привязка к сетке" width={260}>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <SnapCard
+                        on
+                        active={snapEnabled}
+                        onClick={() => {
+                          setSnapEnabled(true)
+                          setMenu(null)
+                        }}
+                      />
+                      <SnapCard
+                        on={false}
+                        active={!snapEnabled}
+                        onClick={() => {
+                          setSnapEnabled(false)
+                          setMenu(null)
+                        }}
+                      />
+                    </div>
+                  </Popover>
+                )}
+              </DockButton>
 
               <DockButton
                 icon={AppWindow}
@@ -966,6 +989,34 @@ function OsCard({ kind, active, onClick }: { kind: "win" | "mac"; active: boolea
         )}
       </span>
       <span className="text-xs font-medium text-white">{kind === "win" ? "Windows" : "macOS"}</span>
+    </button>
+  )
+}
+
+function SnapCard({ on, active, onClick }: { on: boolean; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col gap-2 rounded-xl p-2.5 outline-none ring-1 transition-colors ${
+        active ? "bg-[#a112d6]/20 ring-[#a112d6]" : "bg-white/5 ring-white/10 hover:bg-white/10"
+      }`}
+    >
+      <span className="relative flex h-12 w-full items-center justify-center overflow-hidden rounded-md bg-[#222]">
+        {on ? (
+          <span
+            className="absolute inset-0 opacity-50"
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, rgba(255,255,255,0.18) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.18) 1px, transparent 1px)",
+              backgroundSize: "10px 10px",
+            }}
+          />
+        ) : null}
+        <span
+          className={`relative h-4 w-4 rounded bg-white/85 ${on ? "" : "rotate-[14deg] translate-x-1.5 -translate-y-0.5"}`}
+        />
+      </span>
+      <span className="text-xs font-medium text-white">{on ? "Включена" : "Выключена"}</span>
     </button>
   )
 }
