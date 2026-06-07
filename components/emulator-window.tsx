@@ -117,7 +117,7 @@ const snap = (v: number) => Math.round(v / GRID) * GRID
 /* iOS-style grid: fixed ~25px padding on every edge, cell size flexes so the
    columns/rows fill the desktop evenly. The dock area at the bottom is reserved. */
 const PAD = 25
-const DOCK_RESERVE = 90
+const DOCK_RESERVE = 12
 
 function gridInfo(width: number, height: number) {
   const innerW = width - PAD * 2
@@ -168,8 +168,9 @@ function occupiedCells(
   icons: IconItem[],
   widgets: WidgetItem[],
   excludeId: string,
+  dock?: { left: number; top: number; right: number; bottom: number } | null,
 ) {
-  const { cellW, cellH } = gridInfo(rect.width, rect.height)
+  const { cols, rows, cellW, cellH } = gridInfo(rect.width, rect.height)
   const set = new Set<string>()
   const add = (x: number, y: number, w: number, h: number) => {
     const col = Math.round((x + w / 2 - PAD - (Math.max(1, Math.round(w / cellW)) * cellW) / 2) / cellW)
@@ -180,6 +181,18 @@ function occupiedCells(
   }
   icons.forEach((i) => i.id !== excludeId && add(i.x, i.y, 80, 88))
   widgets.forEach((w) => w.id !== excludeId && add(w.x, w.y, w.w, w.h))
+  // block only the cells that actually overlap the dock capsule
+  if (dock) {
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        const cl = PAD + c * cellW
+        const ct = PAD + r * cellH
+        const overlap =
+          cl < dock.right && cl + cellW > dock.left && ct < dock.bottom && ct + cellH > dock.top
+        if (overlap) set.add(`${c},${r}`)
+      }
+    }
+  }
   return set
 }
 
@@ -226,7 +239,21 @@ export function EmulatorWindow() {
   const [crop, setCropState] = useState<{ src: string; editId?: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const deskRef = useRef<HTMLDivElement>(null)
+  const dockRef = useRef<HTMLDivElement>(null)
   const time = useClock()
+
+  /* dock capsule bounds relative to the desktop, used to block overlapping cells */
+  const getDockRect = () => {
+    const desk = deskRef.current?.getBoundingClientRect()
+    const dock = dockRef.current?.getBoundingClientRect()
+    if (!desk || !dock) return null
+    return {
+      left: dock.left - desk.left,
+      top: dock.top - desk.top,
+      right: dock.right - desk.left,
+      bottom: dock.bottom - desk.top,
+    }
+  }
 
   const activeWallpaper = customWallpaper ?? (dark ? wallpapers[0].value : wallpapers[1].value)
 
@@ -266,7 +293,7 @@ export function EmulatorWindow() {
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - h)
       setIcons((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
       const s = snapToGrid(rect, nx, ny, w, h)
-      const occ = occupiedCells(rect, icons, widgets, id)
+      const occ = occupiedCells(rect, icons, widgets, id, getDockRect())
       const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ) ?? { col: s.col, row: s.row }
       const box = cellToBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH, w, h)
       setDropZone({ x: box.cellLeft, y: box.cellTop, w: box.cellW, h: box.cellH })
@@ -275,7 +302,7 @@ export function EmulatorWindow() {
       const nx = clamp(ox + ev.clientX - sx, 0, rect.width - w)
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - h)
       const s = snapToGrid(rect, nx, ny, w, h)
-      const occ = occupiedCells(rect, icons, widgets, id)
+      const occ = occupiedCells(rect, icons, widgets, id, getDockRect())
       const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ)
       const target = free ?? { col: s.col, row: s.row }
       const box = cellToBox(target.col, target.row, s.cellsW, s.cellsH, s.cellW, s.cellH, w, h)
@@ -303,7 +330,7 @@ export function EmulatorWindow() {
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - item.h)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: nx, y: ny } : it)))
       const s = snapToGrid(rect, nx, ny, item.w, item.h)
-      const occ = occupiedCells(rect, icons, widgets, id)
+      const occ = occupiedCells(rect, icons, widgets, id, getDockRect())
       const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ) ?? { col: s.col, row: s.row }
       const box = cellToBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH, item.w, item.h)
       setDropZone({ x: box.cellLeft, y: box.cellTop, w: box.cellW, h: box.cellH })
@@ -312,7 +339,7 @@ export function EmulatorWindow() {
       const nx = clamp(ox + ev.clientX - sx, 0, rect.width - item.w)
       const ny = clamp(oy + ev.clientY - sy, 0, rect.height - item.h)
       const s = snapToGrid(rect, nx, ny, item.w, item.h)
-      const occ = occupiedCells(rect, icons, widgets, id)
+      const occ = occupiedCells(rect, icons, widgets, id, getDockRect())
       const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ)
       const target = free ?? { col: s.col, row: s.row }
       const box = cellToBox(target.col, target.row, s.cellsW, s.cellsH, s.cellW, s.cellH, item.w, item.h)
@@ -366,7 +393,7 @@ export function EmulatorWindow() {
     let pos = { x: 40 + widgets.length * GRID, y: 40 + widgets.length * GRID }
     if (rect) {
       const s = snapToGrid(rect, pos.x, pos.y, def.w, def.h)
-      const occ = occupiedCells(rect, icons, widgets, id)
+      const occ = occupiedCells(rect, icons, widgets, id, getDockRect())
       const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ) ?? { col: s.col, row: s.row }
       const box = cellToBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH, def.w, def.h)
       pos = { x: box.x, y: box.y }
@@ -418,7 +445,7 @@ export function EmulatorWindow() {
       let pos = { x: snap(40), y: snap(40) }
       if (rect) {
         const s = snapToGrid(rect, pos.x, pos.y, w, h)
-        const occ = occupiedCells(rect, icons, widgets, id)
+        const occ = occupiedCells(rect, icons, widgets, id, getDockRect())
         const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ) ?? { col: s.col, row: s.row }
         const box = cellToBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH, w, h)
         pos = { x: box.x, y: box.y }
@@ -670,7 +697,10 @@ export function EmulatorWindow() {
           </div>
 
           {/* Dock capsule - absolutely centered on screen */}
-          <div className="absolute bottom-6 left-1/2 flex h-14 -translate-x-1/2 items-center gap-2 rounded-full bg-black/35 px-3 backdrop-blur-md">
+          <div
+            ref={dockRef}
+            className="absolute bottom-6 left-1/2 flex h-14 -translate-x-1/2 items-center gap-2 rounded-full bg-black/35 px-3 backdrop-blur-md"
+          >
             <div className="flex items-center gap-1">
               <DockButton icon={Users} label="Конфиги игроков" onClick={() => setModal("configs")} />
 
