@@ -122,6 +122,18 @@ const snap = (v: number) => Math.round(v / GRID) * GRID
    columns/rows fill the desktop evenly. The dock area at the bottom is reserved. */
 const PAD = 25
 const DOCK_RESERVE = 96
+const GAP = 12
+
+/* grid-aligned pixel box for a widget spanning cellsW x cellsH cells, leaving a
+   consistent gap on every side so neighbouring widgets never touch */
+function gridBox(col: number, row: number, cellsW: number, cellsH: number, cellW: number, cellH: number) {
+  return {
+    x: PAD + col * cellW + GAP / 2,
+    y: PAD + row * cellH + GAP / 2,
+    w: cellsW * cellW - GAP,
+    h: cellsH * cellH - GAP,
+  }
+}
 
 function gridInfo(width: number, height: number) {
   const innerW = width - PAD * 2
@@ -342,8 +354,8 @@ export function EmulatorWindow() {
         const occ = occupiedCells(rect, icons, widgets, id)
         const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ)
         const target = free ?? { col: s.col, row: s.row }
-        const box = cellToBox(target.col, target.row, s.cellsW, s.cellsH, s.cellW, s.cellH, item.w, item.h)
-        setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: box.x, y: box.y } : it)))
+        const box = gridBox(target.col, target.row, s.cellsW, s.cellsH, s.cellW, s.cellH)
+        setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: box.x, y: box.y, w: box.w, h: box.h } : it)))
       }
       setDropZone(null)
       window.removeEventListener("pointermove", move)
@@ -356,24 +368,40 @@ export function EmulatorWindow() {
   function startResize(e: React.PointerEvent, id: string) {
     e.preventDefault()
     e.stopPropagation()
+    const rect = deskRef.current?.getBoundingClientRect()
     const item = widgets.find((i) => i.id === id)
-    if (!item) return
+    if (!item || !rect) return
     const sx = e.clientX
     const sy = e.clientY
     const ow = item.w
     const oh = item.h
+    const { cellW, cellH } = gridInfo(rect.width, rect.height)
     const move = (ev: PointerEvent) => {
       const nw = clamp(ow + ev.clientX - sx, GRID, GRID * 4)
       const nh = clamp(oh + ev.clientY - sy, GRID, GRID * 4)
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, w: nw, h: nh } : it)))
-      const cw = clamp(snap(nw), GRID, GRID * 4)
-      const ch = clamp(snap(nh), GRID, GRID * 4)
-      setDropZone({ x: item.x, y: item.y, w: cw, h: ch })
+      if (snapEnabled) {
+        const cellsW = clamp(Math.round(nw / cellW), 1, 4)
+        const cellsH = clamp(Math.round(nh / cellH), 1, 4)
+        const col = Math.round((item.x - PAD) / cellW)
+        const row = Math.round((item.y - PAD) / cellH)
+        const box = gridBox(col, row, cellsW, cellsH, cellW, cellH)
+        setDropZone({ x: PAD + col * cellW, y: PAD + row * cellH, w: cellsW * cellW, h: cellsH * cellH })
+      }
     }
     const up = (ev: PointerEvent) => {
-      const nw = clamp(snap(ow + ev.clientX - sx), GRID, GRID * 4)
-      const nh = clamp(snap(oh + ev.clientY - sy), GRID, GRID * 4)
-      setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, w: nw, h: nh } : it)))
+      const nw = clamp(ow + ev.clientX - sx, GRID, GRID * 4)
+      const nh = clamp(oh + ev.clientY - sy, GRID, GRID * 4)
+      if (snapEnabled) {
+        const cellsW = clamp(Math.round(nw / cellW), 1, 4)
+        const cellsH = clamp(Math.round(nh / cellH), 1, 4)
+        const col = Math.round((item.x - PAD) / cellW)
+        const row = Math.round((item.y - PAD) / cellH)
+        const box = gridBox(col, row, cellsW, cellsH, cellW, cellH)
+        setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, x: box.x, y: box.y, w: box.w, h: box.h } : it)))
+      } else {
+        setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, w: nw, h: nh } : it)))
+      }
       setDropZone(null)
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", up)
@@ -396,8 +424,13 @@ export function EmulatorWindow() {
       const s = snapToGrid(rect, pos.x, pos.y, def.w, def.h)
       const occ = occupiedCells(rect, icons, widgets, id)
       const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ) ?? { col: s.col, row: s.row }
-      const box = cellToBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH, def.w, def.h)
-      pos = { x: box.x, y: box.y }
+      const box = gridBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH)
+      setWidgets((prev) => [
+        ...prev,
+        { id, type, x: box.x, y: box.y, w: box.w, h: box.h, text: type === "notes" ? "" : undefined },
+      ])
+      if (type === "photoPng") setTimeout(() => pickFile("image/png", (url) => updatePhoto(id, url)), 50)
+      return
     }
     setWidgets((prev) => [
       ...prev,
@@ -794,9 +827,9 @@ export function EmulatorWindow() {
         {menu && <button aria-label="Закрыть меню" onClick={() => setMenu(null)} className="absolute inset-0 z-30" />}
 
         {/* Bottom bar */}
-        <div className="absolute inset-x-0 bottom-0 z-40 flex items-end justify-between gap-4 px-6 pb-6">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 flex items-end justify-between gap-4 px-6 pb-6">
           {/* Theme switch */}
-          <div className="flex items-center gap-1 rounded-full bg-black/35 p-1.5 backdrop-blur-md">
+          <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-black/35 p-1.5 backdrop-blur-md">
             <button
               onClick={() => {
                 setDark(false)
@@ -825,7 +858,7 @@ export function EmulatorWindow() {
 
           {/* Dock capsule - absolutely centered on screen */}
           <div
-            className="absolute bottom-6 left-1/2 flex h-14 -translate-x-1/2 items-center gap-2 rounded-full bg-black/35 px-3 backdrop-blur-md"
+            className="pointer-events-auto absolute bottom-6 left-1/2 flex h-14 -translate-x-1/2 items-center gap-2 rounded-full bg-black/35 px-3 backdrop-blur-md"
           >
             <div className="flex items-center gap-1">
               <DockButton icon={Users} label="Конфиги игроков" onClick={() => setModal("configs")} />
@@ -998,7 +1031,7 @@ export function EmulatorWindow() {
           </div>
 
           {/* Clock */}
-          <div className="rounded-full bg-black/35 px-5 py-2.5 text-2xl font-medium text-white backdrop-blur-md">
+          <div className="pointer-events-auto rounded-full bg-black/35 px-5 py-2.5 text-2xl font-medium text-white backdrop-blur-md">
             <span className="font-sf tabular-nums">{time}</span>
           </div>
         </div>
