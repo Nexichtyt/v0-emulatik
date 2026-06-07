@@ -54,17 +54,19 @@ type WidgetItem = {
 
 const GRID = 84
 
-/* dates of the current week (Mon-Sun) for the calendar widget */
-function getCurrentWeek() {
+/* full calendar grid for the current month (leading days padded to Monday start) */
+function getMonthGrid() {
   const today = new Date()
-  const dow = (today.getDay() + 6) % 7 // 0 = Monday
-  const start = new Date(today)
-  start.setDate(today.getDate() - dow)
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start)
-    d.setDate(start.getDate() + i)
-    return d
-  })
+  const year = today.getFullYear()
+  const month = today.getMonth()
+  const first = new Date(year, month, 1)
+  const lead = (first.getDay() + 6) % 7 // 0 = Monday
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells: (number | null)[] = []
+  for (let i = 0; i < lead; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  while (cells.length % 7 !== 0) cells.push(null)
+  return { cells, todayDate: today.getDate() }
 }
 
 const initialApps: Omit<IconItem, "x" | "y">[] = [
@@ -648,40 +650,56 @@ export function EmulatorWindow() {
                 </div>
               </div>
             )}
-            {w.type === "calendar" && (
-              <div className="flex h-full flex-col p-3.5">
-                <div className="flex items-baseline justify-between">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-bold leading-none text-white">{new Date().getDate()}</span>
+            {w.type === "calendar" &&
+              (w.h < 140 ? (
+                <div className="flex h-full flex-col justify-center p-3.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#FE7F00]">
+                    {new Date().toLocaleDateString("ru-RU", { weekday: "long" })}
+                  </span>
+                  <div className="mt-0.5 flex items-baseline gap-1.5">
+                    <span className="text-3xl font-bold leading-none text-white">{new Date().getDate()}</span>
                     <span className="text-sm font-medium capitalize text-white/70">
                       {new Date().toLocaleDateString("ru-RU", { month: "long" })}
                     </span>
                   </div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#FE7F00]">
-                    {new Date().toLocaleDateString("ru-RU", { weekday: "short" })}
-                  </span>
                 </div>
-                <div className="mt-auto flex items-end justify-between gap-1 pt-3">
-                  {getCurrentWeek().map((d) => {
-                    const isToday = d.toDateString() === new Date().toDateString()
-                    return (
-                      <div key={d.toISOString()} className="flex flex-1 flex-col items-center gap-1">
-                        <span className="text-[9px] font-medium uppercase text-white/40">
-                          {d.toLocaleDateString("ru-RU", { weekday: "narrow" })}
-                        </span>
-                        <span
-                          className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums transition-colors ${
-                            isToday ? "bg-[#FE7F00] text-white" : "text-white/75"
-                          }`}
-                        >
-                          {d.getDate()}
-                        </span>
-                      </div>
-                    )
-                  })}
+              ) : (
+                <div className="flex h-full flex-col p-3">
+                  <div className="flex items-baseline justify-between px-0.5">
+                    <span className="text-sm font-semibold capitalize text-white">
+                      {new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}
+                    </span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#FE7F00]">
+                      {new Date().toLocaleDateString("ru-RU", { weekday: "short" })}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-7 gap-y-0.5">
+                    {["П", "В", "С", "Ч", "П", "С", "В"].map((d, i) => (
+                      <span key={i} className="text-center text-[8px] font-medium uppercase text-white/35">
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-1 grid flex-1 grid-cols-7 gap-y-0.5">
+                    {getMonthGrid().cells.map((day, i) => {
+                      const isToday = day === getMonthGrid().todayDate
+                      return (
+                        <div key={i} className="flex items-center justify-center">
+                          {day && (
+                            <span
+                              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold tabular-nums ${
+                                isToday ? "bg-[#FE7F00] text-white" : "text-white/75"
+                              }`}
+                            >
+                              {day}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              ))}
             {w.type === "notes" && (
               <div className="flex h-full flex-col">
                 <div className="flex items-center gap-1.5 border-b border-white/10 px-3.5 pb-2 pt-3 text-white/85">
