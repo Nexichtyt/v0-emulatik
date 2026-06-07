@@ -787,9 +787,9 @@ export function EmulatorWindow() {
             {/* resize handle */}
             <span
               onPointerDown={(e) => startResize(e, w.id)}
-              className="absolute bottom-0 right-0 z-10 h-5 w-5 cursor-nwse-resize opacity-0 transition-opacity group-hover:opacity-100"
+              className="absolute bottom-0 right-0 z-10 flex h-6 w-6 cursor-nwse-resize items-end justify-end opacity-0 transition-opacity group-hover:opacity-100"
             >
-              <span className="absolute bottom-1.5 right-1.5 h-2 w-2 border-b-2 border-r-2 border-white/70" />
+              <span className="h-5 w-5 rounded-tl-full bg-white/85 shadow-[0_1px_4px_rgba(0,0,0,0.4)]" />
             </span>
           </div>
         ))}
