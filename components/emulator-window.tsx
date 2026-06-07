@@ -230,6 +230,13 @@ export function EmulatorWindow() {
   const [showVolume, setShowVolume] = useState(false)
   const [crop, setCropState] = useState<{ src: string; editId?: string } | null>(null)
   const [snapEnabled, setSnapEnabled] = useState(true)
+  const [showTabs, setShowTabs] = useState(false)
+  const [openTabs, setOpenTabs] = useState<{ id: string; name: string; icon: string }[]>([
+    { id: "play-1", name: "Google Play", icon: "/icons/google-play.png" },
+    { id: "play-2", name: "Google Play", icon: "/icons/google-play.png" },
+    { id: "play-3", name: "Google Play", icon: "/icons/google-play.png" },
+  ])
+  const [activeTab, setActiveTab] = useState("play-2")
   const fileRef = useRef<HTMLInputElement>(null)
   const deskRef = useRef<HTMLDivElement>(null)
   const time = useClock()
@@ -476,8 +483,13 @@ export function EmulatorWindow() {
           )}
           <button
             aria-label="Приложения"
+            onClick={() => setShowTabs((v) => !v)}
             className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-              dark ? "text-white/70 hover:bg-white/10 hover:text-white" : "text-black/60 hover:bg-black/10 hover:text-black"
+              showTabs
+                ? "bg-[#FE7F00] text-white"
+                : dark
+                  ? "text-white/70 hover:bg-white/10 hover:text-white"
+                  : "text-black/60 hover:bg-black/10 hover:text-black"
             }`}
           >
             <Layers className="h-[18px] w-[18px]" />
@@ -497,6 +509,39 @@ export function EmulatorWindow() {
       {/* Desktop / wallpaper */}
       <div ref={deskRef} className="relative flex-1 touch-none overflow-hidden">
         <div className="absolute inset-0 transition-all duration-500" style={{ background: activeWallpaper }} />
+
+        {/* Window / tab switcher overlay */}
+        {showTabs && (
+          <div
+            className="absolute inset-0 z-30 flex items-center justify-center bg-black/55 backdrop-blur-sm"
+            onClick={() => setShowTabs(false)}
+          >
+            <div
+              className="flex flex-wrap items-center justify-center gap-7 px-10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {openTabs.map((tab) => (
+                <TabPreview
+                  key={tab.id}
+                  tab={tab}
+                  active={tab.id === activeTab}
+                  onSelect={() => {
+                    setActiveTab(tab.id)
+                    setShowTabs(false)
+                  }}
+                  onClose={() =>
+                    setOpenTabs((prev) => {
+                      const next = prev.filter((t) => t.id !== tab.id)
+                      if (tab.id === activeTab && next.length) setActiveTab(next[0].id)
+                      if (!next.length) setShowTabs(false)
+                      return next
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Drop zone highlight (only the cell where the item will land) */}
         {dropZone && (
@@ -965,6 +1010,51 @@ export function EmulatorWindow() {
         {crop && <CropModal src={crop.src} onCancel={() => setCropState(null)} onApply={applyCrop} />}
       </div>
     </div>
+  )
+}
+
+function TabPreview({
+  tab,
+  active,
+  onSelect,
+  onClose,
+}: {
+  tab: { id: string; name: string; icon: string }
+  active: boolean
+  onSelect: () => void
+  onClose: () => void
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      className={`group relative flex w-60 flex-col overflow-hidden rounded-xl bg-[#16161e] text-left outline-none ring-2 transition-all duration-200 hover:scale-[1.03] ${
+        active ? "ring-[#FE7F00] shadow-[0_0_22px_rgba(254,127,0,0.55)]" : "ring-white/10 hover:ring-white/30"
+      }`}
+    >
+      {/* Title bar */}
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[4px]">
+          <Image src={tab.icon || "/placeholder.svg"} alt="" fill className="object-cover" />
+        </span>
+        <span className="truncate text-sm font-medium text-white">{tab.name}</span>
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label="Закрыть вкладку"
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose()
+          }}
+          className="ml-auto flex h-5 w-5 items-center justify-center rounded-md text-white/50 opacity-0 transition-all hover:bg-white/10 hover:text-white group-hover:opacity-100"
+        >
+          <X className="h-3.5 w-3.5" />
+        </span>
+      </div>
+      {/* Thumbnail */}
+      <div className="relative aspect-[16/10] w-full overflow-hidden bg-black">
+        <Image src="/previews/google-play.png" alt={`${tab.name} preview`} fill className="object-cover" />
+      </div>
+    </button>
   )
 }
 
