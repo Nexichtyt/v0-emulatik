@@ -54,6 +54,19 @@ type WidgetItem = {
 
 const GRID = 84
 
+/* dates of the current week (Mon-Sun) for the calendar widget */
+function getCurrentWeek() {
+  const today = new Date()
+  const dow = (today.getDay() + 6) % 7 // 0 = Monday
+  const start = new Date(today)
+  start.setDate(today.getDate() - dow)
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start)
+    d.setDate(start.getDate() + i)
+    return d
+  })
+}
+
 const initialApps: Omit<IconItem, "x" | "y">[] = [
   { id: "play", name: "Google Play", icon: "/icons/google-play.png" },
   { id: "standoff", name: "Standoff 2", icon: "/icons/standoff2.png" },
@@ -83,8 +96,8 @@ const widgetCatalog: { type: WidgetType; label: string; icon: React.ComponentTyp
 ]
 
 const widgetDefaults: Record<WidgetType, { w: number; h: number }> = {
-  weather: { w: 200, h: 100 },
-  calendar: { w: 200, h: 100 },
+  weather: { w: 200, h: 120 },
+  calendar: { w: 240, h: 160 },
   notes: { w: 200, h: 200 },
   photo: { w: 200, h: 200 },
   photoPng: { w: 100, h: 100 },
@@ -621,27 +634,61 @@ export function EmulatorWindow() {
             }`}
           >
             {w.type === "weather" && (
-              <div className="flex h-full items-center gap-3 p-4">
-                <Cloud className="h-8 w-8 shrink-0 text-white/80" />
-                <div>
-                  <p className="text-2xl font-semibold text-white">21°</p>
-                  <p className="text-xs text-white/60">Облачно</p>
+              <div className="flex h-full flex-col justify-between p-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-3xl font-semibold leading-none text-white">21°</p>
+                    <p className="mt-1 text-xs text-white/60">Облачно</p>
+                  </div>
+                  <Cloud className="h-7 w-7 shrink-0 text-white/80" />
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-white/50">
+                  <span>Москва</span>
+                  <span className="tabular-nums">H:24° L:16°</span>
                 </div>
               </div>
             )}
             {w.type === "calendar" && (
-              <div className="flex h-full flex-col justify-center p-4">
-                <p className="text-xs uppercase tracking-wide text-[#e779f5]">Сегодня</p>
-                <p className="text-xl font-semibold text-white">
-                  {new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
-                </p>
+              <div className="flex h-full flex-col p-3.5">
+                <div className="flex items-baseline justify-between">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-bold leading-none text-white">{new Date().getDate()}</span>
+                    <span className="text-sm font-medium capitalize text-white/70">
+                      {new Date().toLocaleDateString("ru-RU", { month: "long" })}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#FE7F00]">
+                    {new Date().toLocaleDateString("ru-RU", { weekday: "short" })}
+                  </span>
+                </div>
+                <div className="mt-auto flex items-end justify-between gap-1 pt-3">
+                  {getCurrentWeek().map((d) => {
+                    const isToday = d.toDateString() === new Date().toDateString()
+                    return (
+                      <div key={d.toISOString()} className="flex flex-1 flex-col items-center gap-1">
+                        <span className="text-[9px] font-medium uppercase text-white/40">
+                          {d.toLocaleDateString("ru-RU", { weekday: "narrow" })}
+                        </span>
+                        <span
+                          className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums transition-colors ${
+                            isToday ? "bg-[#FE7F00] text-white" : "text-white/75"
+                          }`}
+                        >
+                          {d.getDate()}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
             {w.type === "notes" && (
               <div className="flex h-full flex-col">
-                <div className="flex items-center gap-1.5 px-3 pt-2.5 text-[#e779f5]">
-                  <StickyNote className="h-3.5 w-3.5" />
-                  <span className="text-[11px] font-semibold">Заметка</span>
+                <div className="flex items-center gap-1.5 border-b border-white/10 px-3.5 pb-2 pt-3 text-white/85">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-[5px] bg-[#FE7F00]/90">
+                    <StickyNote className="h-2.5 w-2.5 text-white" />
+                  </span>
+                  <span className="text-[11px] font-semibold tracking-wide">Заметка</span>
                 </div>
                 <textarea
                   defaultValue={w.text}
@@ -650,7 +697,7 @@ export function EmulatorWindow() {
                     setWidgets((prev) => prev.map((it) => (it.id === w.id ? { ...it, text: e.target.value } : it)))
                   }
                   placeholder="Записать..."
-                  className="flex-1 resize-none bg-transparent px-3 py-2 text-xs leading-relaxed text-white outline-none placeholder:text-white/40"
+                  className="flex-1 resize-none bg-transparent px-3.5 py-2.5 text-xs leading-relaxed text-white/90 outline-none placeholder:text-white/35"
                 />
               </div>
             )}
