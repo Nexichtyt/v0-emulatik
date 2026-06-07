@@ -6,6 +6,8 @@ import {
   Settings,
   Keyboard,
   Volume2,
+  Volume1,
+  VolumeX,
   EyeOff,
   ChevronUp,
   Minus,
@@ -224,6 +226,8 @@ export function EmulatorWindow() {
   )
   const [widgets, setWidgets] = useState<WidgetItem[]>([])
   const [dropZone, setDropZone] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  const [volume, setVolume] = useState(70)
+  const [showVolume, setShowVolume] = useState(false)
   const [crop, setCropState] = useState<{ src: string; editId?: string } | null>(null)
   const [snapEnabled, setSnapEnabled] = useState(true)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -497,13 +501,13 @@ export function EmulatorWindow() {
         {/* Drop zone highlight (only the cell where the item will land) */}
         {dropZone && (
           <div
-            className="pointer-events-none absolute z-[1] rounded-2xl border-2 border-white/60 bg-white/10 backdrop-blur-[1px]"
+            className="pointer-events-none absolute z-[1] rounded-2xl border-2 border-[#FE7F00] bg-[#FE7F00]/10 backdrop-blur-[1px]"
             style={{
               left: dropZone.x,
               top: dropZone.y,
               width: dropZone.w,
               height: dropZone.h,
-              boxShadow: "0 0 0 1px rgba(0,0,0,0.15), inset 0 0 20px rgba(255,255,255,0.15)",
+              boxShadow: "0 0 0 1px rgba(0,0,0,0.15), inset 0 0 20px rgba(254,127,0,0.2)",
             }}
           />
         )}
@@ -648,7 +652,51 @@ export function EmulatorWindow() {
         <div className="absolute right-5 top-3 z-20 flex items-center gap-5 rounded-full bg-black/50 px-5 py-2.5 backdrop-blur-md">
           <Settings className="h-[18px] w-[18px] cursor-pointer text-white/90 transition-transform hover:scale-110" />
           <Keyboard className="h-[18px] w-[18px] cursor-pointer text-white/90 transition-transform hover:scale-110" />
-          <Volume2 className="h-[18px] w-[18px] cursor-pointer text-white/90 transition-transform hover:scale-110" />
+          <div className="relative">
+            <button
+              onClick={() => setShowVolume((v) => !v)}
+              aria-label="Громкость"
+              className="flex cursor-pointer items-center text-white/90 transition-transform hover:scale-110"
+            >
+              {volume === 0 ? (
+                <VolumeX className="h-[18px] w-[18px]" />
+              ) : volume < 50 ? (
+                <Volume1 className="h-[18px] w-[18px]" />
+              ) : (
+                <Volume2 className="h-[18px] w-[18px]" />
+              )}
+            </button>
+            {showVolume && (
+              <>
+                <button
+                  aria-label="Закрыть громкость"
+                  onClick={() => setShowVolume(false)}
+                  className="fixed inset-0 z-40 cursor-default"
+                />
+                <div className="absolute right-1/2 top-9 z-50 flex translate-x-1/2 flex-col items-center gap-2 rounded-2xl bg-black/70 px-3 py-3.5 backdrop-blur-md">
+                  <span className="text-[11px] font-medium tabular-nums text-white/90">{volume}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={volume}
+                    onChange={(e) => setVolume(Number(e.target.value))}
+                    className="volume-slider h-28 w-1.5 cursor-pointer appearance-none rounded-full"
+                    style={{
+                      writingMode: "vertical-lr",
+                      direction: "rtl",
+                      background: `linear-gradient(to top, #FE7F00 ${volume}%, rgba(255,255,255,0.2) ${volume}%)`,
+                    }}
+                  />
+                  {volume === 0 ? (
+                    <VolumeX className="h-4 w-4 text-white/70" />
+                  ) : (
+                    <Volume2 className="h-4 w-4 text-white/70" />
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <EyeOff className="h-[18px] w-[18px] cursor-pointer text-white/90 transition-transform hover:scale-110" />
         </div>
 
@@ -749,7 +797,7 @@ export function EmulatorWindow() {
                       value={linkValue}
                       onChange={(e) => setLinkValue(e.target.value)}
                       placeholder="https://link.standoff2.com/..."
-                      className="mt-2.5 w-full rounded-lg bg-white/5 px-3 py-2 text-xs text-white outline-none ring-1 ring-white/10 transition-colors placeholder:text-white/30 focus:ring-[#a112d6]"
+                      className="mt-2.5 w-full rounded-lg bg-white/5 px-3 py-2 text-xs text-white outline-none ring-1 ring-white/10 transition-colors placeholder:text-white/30 focus:ring-[#FE7F00]"
                     />
                     <button
                       disabled={!linkValue.trim()}
@@ -855,7 +903,7 @@ export function EmulatorWindow() {
             </div>
             <span className="h-7 w-px bg-white/20" />
             <span className="flex items-center pr-1">
-              <SLogo size={28} />
+              <SLogo size={40} />
             </span>
           </div>
 
@@ -970,7 +1018,7 @@ function OsCard({ kind, active, onClick }: { kind: "win" | "mac"; active: boolea
     <button
       onClick={onClick}
       className={`flex flex-col gap-2 rounded-xl p-2.5 outline-none ring-1 transition-colors ${
-        active ? "bg-[#a112d6]/20 ring-[#a112d6]" : "bg-white/5 ring-white/10 hover:bg-white/10"
+        active ? "bg-[#FE7F00]/20 ring-[#FE7F00]" : "bg-white/5 ring-white/10 hover:bg-white/10"
       }`}
     >
       <span className="relative flex h-12 w-full items-center overflow-hidden rounded-md bg-[#222]">
@@ -998,7 +1046,7 @@ function SnapCard({ on, active, onClick }: { on: boolean; active: boolean; onCli
     <button
       onClick={onClick}
       className={`flex flex-col gap-2 rounded-xl p-2.5 outline-none ring-1 transition-colors ${
-        active ? "bg-[#a112d6]/20 ring-[#a112d6]" : "bg-white/5 ring-white/10 hover:bg-white/10"
+        active ? "bg-[#FE7F00]/20 ring-[#FE7F00]" : "bg-white/5 ring-white/10 hover:bg-white/10"
       }`}
     >
       <span className="relative flex h-12 w-full items-center justify-center overflow-hidden rounded-md bg-[#222]">
@@ -1119,7 +1167,7 @@ function CropModal({ src, onCancel, onApply }: { src: string; onCancel: () => vo
                 width: `${sel.w * 100}%`,
                 height: `${sel.h * 100}%`,
               }}
-              className="absolute cursor-move overflow-hidden ring-2 ring-white"
+              className="absolute cursor-move overflow-hidden ring-2 ring-[#FE7F00]"
             >
               <img
                 src={src || "/placeholder.svg"}
