@@ -513,7 +513,7 @@ export function EmulatorWindow() {
         {/* Window / tab switcher overlay */}
         {showTabs && (
           <div
-            className="absolute inset-0 z-30 flex items-center justify-center bg-black/55 backdrop-blur-sm"
+            className="absolute inset-0 z-[45] flex items-center justify-center bg-black/70 backdrop-blur-md"
             onClick={() => setShowTabs(false)}
           >
             <div
