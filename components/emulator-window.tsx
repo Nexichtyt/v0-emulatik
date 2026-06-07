@@ -22,7 +22,6 @@ import {
   LayoutGrid,
   MessageCircle,
   AppWindow,
-  Crosshair,
   Monitor,
   MousePointer2,
   Plus,
@@ -77,10 +76,10 @@ const initialApps: Omit<IconItem, "x" | "y">[] = [
 ]
 
 const playerConfigs = [
-  { name: "Aiman", tag: "PRO", resolution: "2400 x 1080", sens: "0.85", crosshair: "Точка · Зелёный" },
-  { name: "Nesko", tag: "FaZe", resolution: "1920 x 1080", sens: "1.20", crosshair: "Крест · Жёлтый" },
-  { name: "Solovey", tag: "TOP-1", resolution: "2340 x 1080", sens: "0.65", crosshair: "Точка · Голубой" },
-  { name: "Murkesh", tag: "MVP", resolution: "2160 x 1080", sens: "0.95", crosshair: "Крест · Красный" },
+  { name: "Aiman", tag: "PRO", resolution: "2400 x 1080", aspect: "16:9", sens: "0.85", crosshairShape: "dot" as const, crosshairColor: "#34d399" },
+  { name: "Nesko", tag: "FaZe", resolution: "1280 x 960", aspect: "4:3", sens: "1.20", crosshairShape: "cross" as const, crosshairColor: "#facc15" },
+  { name: "Solovey", tag: "TOP-1", resolution: "2340 x 1080", aspect: "16:9", sens: "0.65", crosshairShape: "dot" as const, crosshairColor: "#38bdf8" },
+  { name: "Murkesh", tag: "MVP", resolution: "1440 x 1080", aspect: "4:3", sens: "0.95", crosshairShape: "cross" as const, crosshairColor: "#f87171" },
 ]
 
 const wallpapers = [
@@ -473,30 +472,23 @@ export function EmulatorWindow() {
     setWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, photo: url } : w)))
   }
 
-  function applyCrop(sel: Crop, aspect: number) {
-    let w = 200
-    let h = Math.round(w / aspect)
-    if (h > 280) {
-      h = 280
-      w = Math.round(h * aspect)
-    }
-    if (h < 90) {
-      h = 90
-      w = Math.round(h * aspect)
-    }
-    w = clamp(w, 120, 380)
+  function applyCrop(sel: Crop, cellsW: number, cellsH: number) {
+    const rect = deskRef.current?.getBoundingClientRect()
+    const { cellW, cellH } = rect ? gridInfo(rect.width, rect.height) : { cellW: GRID, cellH: GRID }
+    const w = Math.round(cellsW * cellW - GAP)
+    const h = Math.round(cellsH * cellH - GAP)
     if (crop?.editId) {
       const id = crop.editId
       setWidgets((prev) => prev.map((it) => (it.id === id ? { ...it, photo: crop.src, crop: sel, w, h } : it)))
     } else {
       const id = `photo-${Date.now()}`
-      const rect = deskRef.current?.getBoundingClientRect()
       let pos = { x: snap(40), y: snap(40) }
       if (rect) {
-        const s = snapToGrid(rect, pos.x, pos.y, w, h)
         const occ = occupiedCells(rect, icons, widgets, id)
-        const free = findFreeCell(s.col, s.row, s.cellsW, s.cellsH, s.cols, s.rows, occ) ?? { col: s.col, row: s.row }
-        const box = cellToBox(free.col, free.row, s.cellsW, s.cellsH, s.cellW, s.cellH, w, h)
+        const cols = gridInfo(rect.width, rect.height).cols
+        const rows = gridInfo(rect.width, rect.height).rows
+        const free = findFreeCell(0, 0, cellsW, cellsH, cols, rows, occ) ?? { col: 0, row: 0 }
+        const box = gridBox(free.col, free.row, cellsW, cellsH, cellW, cellH)
         pos = { x: box.x, y: box.y }
       }
       setWidgets((prev) => [...prev, { id, type: "photo", x: pos.x, y: pos.y, w, h, photo: crop!.src, crop: sel }])
@@ -644,8 +636,7 @@ export function EmulatorWindow() {
                   </div>
                   <Cloud className="h-7 w-7 shrink-0 text-white/80" />
                 </div>
-                <div className="flex items-center justify-between text-[10px] text-white/50">
-                  <span>Москва</span>
+                <div className="flex items-center justify-end text-[10px] text-white/50">
                   <span className="tabular-nums">H:24° L:16°</span>
                 </div>
               </div>
@@ -1119,26 +1110,25 @@ export function EmulatorWindow() {
               <div className="space-y-2 p-5">
                 {playerConfigs.map((p) => (
                   <div key={p.name} className="flex items-center gap-4 rounded-xl bg-white/5 p-3 transition-colors hover:bg-white/10">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#a112d6] to-[#4f37d8] text-sm font-semibold text-white">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white ring-1 ring-white/15">
                       {p.name.slice(0, 2)}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-sm font-semibold text-white">{p.name}</p>
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-[#e779f5]">{p.tag}</span>
+                        <span className="rounded-full bg-[#FE7F00]/15 px-2 py-0.5 text-[10px] font-medium text-[#FE7F00]">{p.tag}</span>
                       </div>
                       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/60">
                         <span className="flex items-center gap-1">
                           <Monitor className="h-3.5 w-3.5" /> {p.resolution}
+                          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70">{p.aspect}</span>
                         </span>
                         <span className="flex items-center gap-1">
                           <MousePointer2 className="h-3.5 w-3.5" /> Сенса {p.sens}
                         </span>
-                        <span className="flex items-center gap-1">
-                          <Crosshair className="h-3.5 w-3.5" /> {p.crosshair}
-                        </span>
                       </div>
                     </div>
+                    <CrosshairPreview shape={p.crosshairShape} color={p.crosshairColor} />
                     <button className="shrink-0 rounded-lg bg-white/90 px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-white">
                       Выбрать
                     </button>
@@ -1150,7 +1140,19 @@ export function EmulatorWindow() {
         )}
 
         {/* Photo crop / zone selector */}
-        {crop && <CropModal src={crop.src} onCancel={() => setCropState(null)} onApply={applyCrop} />}
+        {crop && (
+          <CropModal
+            src={crop.src}
+            cellAspect={(() => {
+              const rect = deskRef.current?.getBoundingClientRect()
+              if (!rect) return 1
+              const { cellW, cellH } = gridInfo(rect.width, rect.height)
+              return cellW / cellH
+            })()}
+            onCancel={() => setCropState(null)}
+            onApply={applyCrop}
+          />
+        )}
       </div>
     </div>
   )
@@ -1304,8 +1306,38 @@ function SnapCard({ on, active, onClick }: { on: boolean; active: boolean; onCli
 
 /* Lets the user pick the visible region of a photo. The chosen zone defines the
    widget's aspect ratio (and thus its size); afterwards it can be freely moved/resized. */
-function CropModal({ src, onCancel, onApply }: { src: string; onCancel: () => void; onApply: (sel: Crop, aspect: number) => void }) {
+function CrosshairPreview({ shape, color }: { shape: "dot" | "cross"; color: string }) {
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-black/40 ring-1 ring-white/10">
+      <svg width="22" height="22" viewBox="0 0 22 22">
+        {shape === "dot" ? (
+          <circle cx="11" cy="11" r="2.5" fill={color} />
+        ) : (
+          <g stroke={color} strokeWidth="2" strokeLinecap="round">
+            <line x1="11" y1="3" x2="11" y2="8" />
+            <line x1="11" y1="14" x2="11" y2="19" />
+            <line x1="3" y1="11" x2="8" y2="11" />
+            <line x1="14" y1="11" x2="19" y2="11" />
+          </g>
+        )}
+      </svg>
+    </span>
+  )
+}
+
+function CropModal({
+  src,
+  cellAspect,
+  onCancel,
+  onApply,
+}: {
+  src: string
+  cellAspect: number
+  onCancel: () => void
+  onApply: (sel: Crop, cellsW: number, cellsH: number) => void
+}) {
   const [sel, setSel] = useState<Crop>({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 })
+  const [blocks, setBlocks] = useState({ w: 2, h: 2 })
   const nat = useRef({ w: 1, h: 1 })
   const boxRef = useRef<HTMLDivElement>(null)
 
@@ -1350,9 +1382,12 @@ function CropModal({ src, onCancel, onApply }: { src: string; onCancel: () => vo
     window.addEventListener("pointerup", up)
   }
 
-  function preset(aspect: number) {
-    // aspect = w/h in pixels; convert to fraction box centered in the image
-    const r = (aspect * nat.current.h) / nat.current.w // selW/selH in fractions
+  // choose a block span (cellsW x cellsH); the crop selection adopts the matching
+  // pixel aspect ratio so the photo fills exactly that many desktop blocks
+  function preset(cw: number, ch: number) {
+    setBlocks({ w: cw, h: ch })
+    const targetAspect = (cw * cellAspect) / ch // selW/selH in pixels = (cw*cellW)/(ch*cellH)
+    const r = (targetAspect * nat.current.h) / nat.current.w // selW/selH in fractions
     let h = 0.8
     let w = h * r
     if (w > 1) {
@@ -1361,8 +1396,6 @@ function CropModal({ src, onCancel, onApply }: { src: string; onCancel: () => vo
     }
     setSel({ x: (1 - w) / 2, y: (1 - h) / 2, w, h })
   }
-
-  const aspect = (sel.w * nat.current.w) / (sel.h * nat.current.h)
 
   return (
     <div className="absolute inset-0 z-[60] flex items-center justify-center p-6">
@@ -1422,12 +1455,33 @@ function CropModal({ src, onCancel, onApply }: { src: string; onCancel: () => vo
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-2">
-            <span className="text-[11px] text-white/50">Формат:</span>
-            <button onClick={() => preset(1)} className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] text-white/80 ring-1 ring-white/10 hover:bg-white/10">1:1</button>
-            <button onClick={() => preset(4 / 3)} className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] text-white/80 ring-1 ring-white/10 hover:bg-white/10">4:3</button>
-            <button onClick={() => preset(16 / 9)} className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] text-white/80 ring-1 ring-white/10 hover:bg-white/10">16:9</button>
-            <button onClick={() => preset(9 / 16)} className="rounded-md bg-white/5 px-2.5 py-1 text-[11px] text-white/80 ring-1 ring-white/10 hover:bg-white/10">9:16</button>
+          <div className="mt-4">
+            <span className="text-[11px] text-white/50">Размер (блоки):</span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                { w: 1, h: 1 },
+                { w: 2, h: 1 },
+                { w: 2, h: 2 },
+                { w: 3, h: 2 },
+                { w: 2, h: 3 },
+                { w: 4, h: 2 },
+              ].map((b) => {
+                const active = blocks.w === b.w && blocks.h === b.h
+                return (
+                  <button
+                    key={`${b.w}x${b.h}`}
+                    onClick={() => preset(b.w, b.h)}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 transition-colors ${
+                      active
+                        ? "bg-[#FE7F00] text-white ring-[#FE7F00]"
+                        : "bg-white/5 text-white/80 ring-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    {b.w}×{b.h}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <div className="mt-4 flex justify-end gap-2">
@@ -1435,7 +1489,7 @@ function CropModal({ src, onCancel, onApply }: { src: string; onCancel: () => vo
               Отмена
             </button>
             <button
-              onClick={() => onApply(sel, aspect)}
+              onClick={() => onApply(sel, blocks.w, blocks.h)}
               className="flex items-center gap-1.5 rounded-lg bg-white/90 px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-white"
             >
               <Check className="h-3.5 w-3.5" />
