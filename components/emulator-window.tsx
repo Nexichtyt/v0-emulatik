@@ -9,6 +9,7 @@ import {
   Volume1,
   VolumeX,
   EyeOff,
+  Eye,
   ChevronUp,
   Minus,
   Square,
@@ -228,6 +229,8 @@ export function EmulatorWindow() {
   const [dropZone, setDropZone] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [volume, setVolume] = useState(70)
   const [showVolume, setShowVolume] = useState(false)
+  const [brightness, setBrightness] = useState(0)
+  const [showBrightness, setShowBrightness] = useState(false)
   const [crop, setCropState] = useState<{ src: string; editId?: string } | null>(null)
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [showTabs, setShowTabs] = useState(false)
@@ -546,13 +549,13 @@ export function EmulatorWindow() {
         {/* Drop zone highlight (only the cell where the item will land) */}
         {dropZone && (
           <div
-            className="pointer-events-none absolute z-[1] rounded-2xl border-2 border-[#FE7F00] bg-[#FE7F00]/10 backdrop-blur-[1px]"
+            className="pointer-events-none absolute z-[1] rounded-2xl border-2 border-white/60 bg-white/10 backdrop-blur-[1px]"
             style={{
               left: dropZone.x,
               top: dropZone.y,
               width: dropZone.w,
               height: dropZone.h,
-              boxShadow: "0 0 0 1px rgba(0,0,0,0.15), inset 0 0 20px rgba(254,127,0,0.2)",
+              boxShadow: "0 0 0 1px rgba(0,0,0,0.15), inset 0 0 20px rgba(255,255,255,0.15)",
             }}
           />
         )}
@@ -742,7 +745,49 @@ export function EmulatorWindow() {
               </>
             )}
           </div>
-          <EyeOff className="h-[18px] w-[18px] cursor-pointer text-white/90 transition-transform hover:scale-110" />
+          <div className="relative">
+            <button
+              onClick={() => setShowBrightness((v) => !v)}
+              aria-label="Видимость"
+              className="flex cursor-pointer items-center text-white/90 transition-transform hover:scale-110"
+            >
+              {brightness === 0 ? (
+                <EyeOff className="h-[18px] w-[18px]" />
+              ) : (
+                <Eye className="h-[18px] w-[18px]" />
+              )}
+            </button>
+            {showBrightness && (
+              <>
+                <button
+                  aria-label="Закрыть видимость"
+                  onClick={() => setShowBrightness(false)}
+                  className="fixed inset-0 z-40 cursor-default"
+                />
+                <div className="absolute right-1/2 top-9 z-50 flex translate-x-1/2 flex-col items-center gap-2 rounded-2xl bg-black/70 px-3 py-3.5 backdrop-blur-md">
+                  <span className="text-[11px] font-medium tabular-nums text-white/90">{brightness}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={brightness}
+                    onChange={(e) => setBrightness(Number(e.target.value))}
+                    className="volume-slider h-28 w-1.5 cursor-pointer appearance-none rounded-full"
+                    style={{
+                      writingMode: "vertical-lr",
+                      direction: "rtl",
+                      background: `linear-gradient(to top, #FE7F00 ${brightness}%, rgba(255,255,255,0.2) ${brightness}%)`,
+                    }}
+                  />
+                  {brightness === 0 ? (
+                    <EyeOff className="h-4 w-4 text-white/70" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-white/70" />
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Click-away layer for popovers (no blur) */}
@@ -953,8 +998,8 @@ export function EmulatorWindow() {
           </div>
 
           {/* Clock */}
-          <div className="rounded-2xl bg-black/35 px-5 py-2.5 text-2xl font-medium text-white backdrop-blur-md">
-            <span className="font-mono tabular-nums">{time}</span>
+          <div className="rounded-full bg-black/35 px-5 py-2.5 text-2xl font-medium text-white backdrop-blur-md">
+            <span className="font-sf tabular-nums">{time}</span>
           </div>
         </div>
 
